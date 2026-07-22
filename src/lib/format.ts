@@ -20,12 +20,10 @@ export function formatCountdown(iso: string): string {
   const diffMs = race.getTime() - now.getTime();
   if (diffMs < 0) return "Past";
   const totalDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  const months = Math.floor(totalDays / 30);
-  const weeks = Math.floor((totalDays % 30) / 7);
+  const weeks = Math.floor(totalDays / 7);
   const days = totalDays % 7;
   const parts: string[] = [];
-  if (months > 0) parts.push(`${months}mo`);
-  if (weeks > 0) parts.push(`${weeks}w`);
-  if (days > 0 || parts.length === 0) parts.push(`${days}d`);
+  if (weeks > 0) parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} day${days === 1 ? "" : "s"}`);
   return parts.join(" ");
 }

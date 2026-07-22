@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/", label: "Races" },
   { href: "/my-races", label: "My Races" },
+  { href: "/world-majors", label: "World Majors" },
 ];
 
 export function NavTabs() {
