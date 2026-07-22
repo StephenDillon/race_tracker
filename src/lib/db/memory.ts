@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
+import { countries, type TCountryCode } from "countries-list";
 import type {
   Race,
   RaceFilters,
@@ -23,12 +24,14 @@ export class MemoryRaceStore implements RaceStore {
 
   async listRaces(filters: RaceFilters): Promise<RaceListResult> {
     const dateFrom = filters.dateFrom ?? new Date().toISOString().slice(0, 10);
-    const location = filters.location?.trim().toLowerCase();
+    const q = filters.q?.trim().toLowerCase();
 
     const matches = this.races
       .filter((race) => {
         if (race.date < dateFrom) return false;
         if (filters.dateTo && race.date > filters.dateTo) return false;
+
+        if (q && !race.name.toLowerCase().includes(q)) return false;
 
         if (filters.distances && filters.distances.length > 0) {
           const hasDistance = race.distances.some(
@@ -38,10 +41,11 @@ export class MemoryRaceStore implements RaceStore {
           if (!hasDistance) return false;
         }
 
-        if (location) {
-          const haystack =
-            `${race.city} ${race.region} ${race.country}`.toLowerCase();
-          if (!haystack.includes(location)) return false;
+        if (filters.countryCode) {
+          if (race.countryCode !== filters.countryCode) return false;
+        } else if (filters.continent) {
+          const country = countries[race.countryCode as TCountryCode];
+          if (country?.continent !== filters.continent) return false;
         }
 
         if (
@@ -86,6 +90,9 @@ export class MemoryRaceStore implements RaceStore {
   async createRace(submission: RaceSubmission): Promise<Race> {
     const race: Race = {
       ...submission,
+      country:
+        countries[submission.countryCode as TCountryCode]?.name ??
+        submission.countryCode,
       id: randomUUID(),
       createdAt: new Date().toISOString(),
     };

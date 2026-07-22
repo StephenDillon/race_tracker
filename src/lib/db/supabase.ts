@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { countries, getCountryData, type TCountryCode } from "countries-list";
 import type {
   EntryStatus,
   Race,
@@ -30,6 +31,7 @@ interface RtRaceRow {
   city: string;
   region: string;
   country: string;
+  country_code: string;
   entry_status: EntryStatus;
   is_major_marathon: boolean;
   is_major_qualifier: boolean;
@@ -47,6 +49,7 @@ function rowToRace(row: RtRaceRow): Race {
     city: row.city,
     region: row.region,
     country: row.country,
+    countryCode: row.country_code,
     entryStatus: row.entry_status,
     isMajorMarathon: row.is_major_marathon,
     isMajorQualifier: row.is_major_qualifier,
@@ -56,9 +59,16 @@ function rowToRace(row: RtRaceRow): Race {
   };
 }
 
-/** Strip characters that would break PostgREST or() / ilike filter syntax. */
+/** Strip characters that carry meaning in PostgREST ilike patterns. */
 function sanitizeSearchTerm(term: string): string {
   return term.replace(/[,()%\\]/g, " ").trim();
+}
+
+/** All ISO country codes belonging to a continent (e.g. "EU"). */
+function continentCountryCodes(continent: string): string[] {
+  return (Object.keys(countries) as TCountryCode[]).filter(
+    (code) => countries[code].continent === continent,
+  );
 }
 
 export class SupabaseRaceStore implements RaceStore {
@@ -86,13 +96,15 @@ export class SupabaseRaceStore implements RaceStore {
       query = query.overlaps("standard_distances", filters.distances);
     }
 
-    if (filters.location?.trim()) {
-      const term = sanitizeSearchTerm(filters.location);
-      if (term) {
-        query = query.or(
-          `city.ilike.%${term}%,region.ilike.%${term}%,country.ilike.%${term}%`,
-        );
-      }
+    if (filters.q?.trim()) {
+      const term = sanitizeSearchTerm(filters.q);
+      if (term) query = query.ilike("name", `%${term}%`);
+    }
+
+    if (filters.countryCode) {
+      query = query.eq("country_code", filters.countryCode);
+    } else if (filters.continent) {
+      query = query.in("country_code", continentCountryCodes(filters.continent));
     }
 
     if (filters.entryStatuses && filters.entryStatuses.length > 0) {
@@ -142,7 +154,8 @@ export class SupabaseRaceStore implements RaceStore {
           .map((d) => d.distance),
         city: submission.city,
         region: submission.region,
-        country: submission.country,
+        country: getCountryData(submission.countryCode as TCountryCode).name,
+        country_code: submission.countryCode,
         entry_status: submission.entryStatus,
         is_major_marathon: submission.isMajorMarathon,
         is_major_qualifier: submission.isMajorQualifier,

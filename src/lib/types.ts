@@ -51,7 +51,10 @@ export interface Race {
   distances: RaceDistance[];
   city: string;
   region: string; // state / province / county, free text
+  /** Display name derived from countryCode (e.g. "United States"). */
   country: string;
+  /** ISO 3166-1 alpha-2 code (e.g. "US"). Canonical location field for filtering. */
+  countryCode: string;
   entryStatus: EntryStatus;
   /** One of the World Marathon Majors (Boston, London, Berlin, Chicago, NYC, Tokyo, Sydney). */
   isMajorMarathon: boolean;
@@ -63,19 +66,26 @@ export interface Race {
   createdAt: string;
 }
 
-/** Payload accepted when someone submits a race. */
-export type RaceSubmission = Omit<Race, "id" | "createdAt">;
+/** Payload accepted when someone submits a race. `country` is derived server-side from `countryCode`. */
+export type RaceSubmission = Omit<Race, "id" | "createdAt" | "country">;
+
+/** Continent codes as used by countries-list (AF, AN, AS, EU, NA, OC, SA). */
+export type ContinentCode = "AF" | "AN" | "AS" | "EU" | "NA" | "OC" | "SA";
 
 /** Filters accepted by the race listing API. All optional; combined with AND. */
 export interface RaceFilters {
+  /** Free-text search on race name. */
+  q?: string;
   /** Races on or after this ISO date. Defaults to today ("upcoming"). */
   dateFrom?: string;
   /** Races on or before this ISO date. */
   dateTo?: string;
   /** Match any of these standard distances. */
   distances?: StandardDistance[];
-  /** Free-text match against city, region, and country. */
-  location?: string;
+  /** Filter to a continent (ignored when countryCode is set). */
+  continent?: ContinentCode;
+  /** Filter to a single country (ISO 3166-1 alpha-2). */
+  countryCode?: string;
   /** Match any of these entry statuses. */
   entryStatuses?: EntryStatus[];
   majorMarathon?: boolean;

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { continents, countries } from "countries-list";
 import { getRaceStore } from "@/lib/db";
 import {
   ENTRY_STATUSES,
   STANDARD_DISTANCES,
+  type ContinentCode,
   type EntryStatus,
   type RaceDistance,
   type RaceFilters,
@@ -25,9 +27,11 @@ function parseBoolean(value: string | null): boolean | undefined {
  * GET /api/races — list races with filters.
  *
  * Query params:
+ *   q                  free-text search on race name
  *   dateFrom, dateTo   ISO dates (dateFrom defaults to today)
  *   distances          comma-separated standard distances (e.g. "5K,Marathon")
- *   location           free-text match on city / region / country
+ *   continent          continent code (AF, AN, AS, EU, NA, OC, SA)
+ *   country            ISO 3166-1 alpha-2 country code (e.g. "US"); wins over continent
  *   entryStatuses      comma-separated entry statuses (e.g. "open,ballot")
  *   majorMarathon      "true" | "false"
  *   majorQualifier     "true" | "false"
@@ -59,14 +63,26 @@ export async function GET(request: NextRequest) {
       (ENTRY_STATUSES as readonly string[]).includes(s),
     );
 
+  const continentParam = params.get("continent") ?? undefined;
+  const continent =
+    continentParam && continentParam in continents
+      ? (continentParam as ContinentCode)
+      : undefined;
+
+  const countryParam = params.get("country")?.toUpperCase() ?? undefined;
+  const countryCode =
+    countryParam && countryParam in countries ? countryParam : undefined;
+
   const limitParam = Number(params.get("limit") ?? 25);
   const offsetParam = Number(params.get("offset") ?? 0);
 
   const filters: RaceFilters = {
+    q: params.get("q") ?? undefined,
     dateFrom,
     dateTo,
     distances,
-    location: params.get("location") ?? undefined,
+    continent,
+    countryCode,
     entryStatuses,
     majorMarathon: parseBoolean(params.get("majorMarathon")),
     majorQualifier: parseBoolean(params.get("majorQualifier")),
@@ -88,10 +104,15 @@ function validateSubmission(body: unknown): RaceSubmission | string {
   if (typeof b.date !== "string" || !ISO_DATE.test(b.date)) {
     return "date is required (YYYY-MM-DD)";
   }
-  for (const field of ["city", "region", "country"] as const) {
+  for (const field of ["city", "region"] as const) {
     if (typeof b[field] !== "string" || (b[field] as string).trim().length === 0) {
       return `${field} is required`;
     }
+  }
+  const countryCode =
+    typeof b.countryCode === "string" ? b.countryCode.toUpperCase() : "";
+  if (!(countryCode in countries)) {
+    return "countryCode must be a valid ISO 3166-1 alpha-2 code";
   }
   if (!(ENTRY_STATUSES as readonly string[]).includes(b.entryStatus as string)) {
     return `entryStatus must be one of: ${ENTRY_STATUSES.join(", ")}`;
@@ -135,7 +156,7 @@ function validateSubmission(body: unknown): RaceSubmission | string {
     distances,
     city: (b.city as string).trim(),
     region: (b.region as string).trim(),
-    country: (b.country as string).trim(),
+    countryCode,
     entryStatus: b.entryStatus as EntryStatus,
     isMajorMarathon: b.isMajorMarathon === true,
     isMajorQualifier: b.isMajorQualifier === true,

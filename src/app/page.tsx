@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { continents, countries, type TCountryCode } from "countries-list";
 import {
   ENTRY_STATUS_LABELS,
   ENTRY_STATUSES,
   STANDARD_DISTANCES,
+  type ContinentCode,
   type EntryStatus,
   type Race,
   type RaceDistance,
@@ -14,24 +16,40 @@ import {
 const PAGE_SIZE = 25;
 
 interface FilterState {
+  q: string;
   dateFrom: string;
   dateTo: string;
   distances: StandardDistance[];
-  location: string;
+  continent: "" | ContinentCode;
+  country: string; // ISO code or ""
   entryStatuses: EntryStatus[];
   majorMarathon: "" | "true" | "false";
   majorQualifier: "" | "true" | "false";
 }
 
 const EMPTY_FILTERS: FilterState = {
+  q: "",
   dateFrom: "",
   dateTo: "",
   distances: [],
-  location: "",
+  continent: "",
+  country: "",
   entryStatuses: [],
   majorMarathon: "",
   majorQualifier: "",
 };
+
+const CONTINENT_OPTIONS = (
+  Object.entries(continents) as [ContinentCode, string][]
+).sort((a, b) => a[1].localeCompare(b[1]));
+
+const ALL_COUNTRIES = (Object.keys(countries) as TCountryCode[])
+  .map((code) => ({
+    code,
+    name: countries[code].name,
+    continent: countries[code].continent,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 function formatDistances(distances: RaceDistance[]): string {
   return distances
@@ -56,6 +74,17 @@ const STATUS_STYLES: Record<EntryStatus, string> = {
   sold_out: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300",
 };
 
+const inputClass =
+  "rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+
+function chipClass(active: boolean): string {
+  return `rounded-full border px-2.5 py-1 text-xs ${
+    active
+      ? "border-emerald-600 bg-emerald-600 text-white"
+      : "border-zinc-300 hover:border-emerald-500 dark:border-zinc-700"
+  }`;
+}
+
 export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [races, setRaces] = useState<Race[]>([]);
@@ -64,37 +93,63 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRaces = useCallback(async (f: FilterState, pageOffset: number) => {
-    setLoading(true);
-    setError(null);
+  // Debounce the text search so we don't hit the API on every keystroke.
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(filters.q), 300);
+    return () => clearTimeout(t);
+  }, [filters.q]);
 
-    const params = new URLSearchParams();
-    if (f.dateFrom) params.set("dateFrom", f.dateFrom);
-    if (f.dateTo) params.set("dateTo", f.dateTo);
-    if (f.distances.length) params.set("distances", f.distances.join(","));
-    if (f.location.trim()) params.set("location", f.location.trim());
-    if (f.entryStatuses.length) params.set("entryStatuses", f.entryStatuses.join(","));
-    if (f.majorMarathon) params.set("majorMarathon", f.majorMarathon);
-    if (f.majorQualifier) params.set("majorQualifier", f.majorQualifier);
-    params.set("limit", String(PAGE_SIZE));
-    params.set("offset", String(pageOffset));
+  const fetchRaces = useCallback(
+    async (f: FilterState, q: string, pageOffset: number) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const res = await fetch(`/api/races?${params.toString()}`);
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      const data: { races: Race[]; total: number } = await res.json();
-      setRaces(data.races);
-      setTotal(data.total);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load races");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      if (f.dateFrom) params.set("dateFrom", f.dateFrom);
+      if (f.dateTo) params.set("dateTo", f.dateTo);
+      if (f.distances.length) params.set("distances", f.distances.join(","));
+      if (f.country) params.set("country", f.country);
+      else if (f.continent) params.set("continent", f.continent);
+      if (f.entryStatuses.length)
+        params.set("entryStatuses", f.entryStatuses.join(","));
+      if (f.majorMarathon) params.set("majorMarathon", f.majorMarathon);
+      if (f.majorQualifier) params.set("majorQualifier", f.majorQualifier);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(pageOffset));
+
+      try {
+        const res = await fetch(`/api/races?${params.toString()}`);
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        const data: { races: Race[]; total: number } = await res.json();
+        setRaces(data.races);
+        setTotal(data.total);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load races");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    fetchRaces(filters, offset);
-  }, [fetchRaces, filters, offset]);
+    fetchRaces(filters, debouncedQ, offset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    fetchRaces,
+    debouncedQ,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.distances,
+    filters.continent,
+    filters.country,
+    filters.entryStatuses,
+    filters.majorMarathon,
+    filters.majorQualifier,
+    offset,
+  ]);
 
   const updateFilters = (patch: Partial<FilterState>) => {
     setOffset(0);
@@ -115,144 +170,158 @@ export default function HomePage() {
         : [...filters.entryStatuses, s],
     });
 
+  const countryOptions = useMemo(
+    () =>
+      filters.continent
+        ? ALL_COUNTRIES.filter((c) => c.continent === filters.continent)
+        : ALL_COUNTRIES,
+    [filters.continent],
+  );
+
   const hasActiveFilters =
     JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      {/* Filter panel */}
-      <aside className="w-full shrink-0 lg:w-72">
-        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Filters</h2>
-            {hasActiveFilters && (
-              <button
-                onClick={() => {
-                  setOffset(0);
-                  setFilters(EMPTY_FILTERS);
-                }}
-                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
-              >
-                Clear all
-              </button>
-            )}
+    <div className="flex flex-col gap-5">
+      {/* Filter bar */}
+      <section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="flex flex-col gap-4">
+          {/* Row 1: search + dates + location */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <input
+              type="search"
+              placeholder="Search races by name…"
+              value={filters.q}
+              onChange={(e) => updateFilters({ q: e.target.value })}
+              className={`${inputClass} lg:col-span-1`}
+              aria-label="Search races by name"
+            />
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => updateFilters({ dateFrom: e.target.value })}
+              className={inputClass}
+              aria-label="From date"
+            />
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => updateFilters({ dateTo: e.target.value })}
+              className={inputClass}
+              aria-label="To date"
+            />
+            <select
+              value={filters.continent}
+              onChange={(e) =>
+                updateFilters({
+                  continent: e.target.value as FilterState["continent"],
+                  country: "",
+                })
+              }
+              className={inputClass}
+              aria-label="Continent"
+            >
+              <option value="">All continents</option>
+              {CONTINENT_OPTIONS.map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filters.country}
+              onChange={(e) => updateFilters({ country: e.target.value })}
+              className={inputClass}
+              aria-label="Country"
+            >
+              <option value="">All countries</option>
+              {countryOptions.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="flex flex-col gap-5 text-sm">
-            <fieldset>
-              <legend className="mb-2 font-medium">Dates</legend>
-              <div className="flex flex-col gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-zinc-500">From</span>
-                  <input
-                    type="date"
-                    value={filters.dateFrom}
-                    onChange={(e) => updateFilters({ dateFrom: e.target.value })}
-                    className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-zinc-500">To</span>
-                  <input
-                    type="date"
-                    value={filters.dateTo}
-                    onChange={(e) => updateFilters({ dateTo: e.target.value })}
-                    className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-                  />
-                </label>
-              </div>
-            </fieldset>
+          {/* Row 2: distance + entry chips + majors */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs font-medium text-zinc-500">
+                Distance
+              </span>
+              {STANDARD_DISTANCES.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => toggleDistance(d)}
+                  className={chipClass(filters.distances.includes(d))}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
 
-            <fieldset>
-              <legend className="mb-2 font-medium">Distance</legend>
-              <div className="flex flex-wrap gap-1.5">
-                {STANDARD_DISTANCES.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => toggleDistance(d)}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${
-                      filters.distances.includes(d)
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-zinc-300 hover:border-emerald-500 dark:border-zinc-700"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs font-medium text-zinc-500">
+                Entry
+              </span>
+              {ENTRY_STATUSES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => toggleEntryStatus(s)}
+                  className={chipClass(filters.entryStatuses.includes(s))}
+                >
+                  {ENTRY_STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
 
-            <fieldset>
-              <legend className="mb-2 font-medium">Location</legend>
-              <input
-                type="text"
-                placeholder="City, region, or country"
-                value={filters.location}
-                onChange={(e) => updateFilters({ location: e.target.value })}
-                className="w-full rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-              />
-            </fieldset>
-
-            <fieldset>
-              <legend className="mb-2 font-medium">Entry criteria</legend>
-              <div className="flex flex-col gap-1.5">
-                {ENTRY_STATUSES.map((s) => (
-                  <label key={s} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.entryStatuses.includes(s)}
-                      onChange={() => toggleEntryStatus(s)}
-                      className="accent-emerald-600"
-                    />
-                    {ENTRY_STATUS_LABELS[s]}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend className="mb-2 font-medium">Majors</legend>
-              <div className="flex flex-col gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-zinc-500">Major marathon</span>
-                  <select
-                    value={filters.majorMarathon}
-                    onChange={(e) =>
-                      updateFilters({
-                        majorMarathon: e.target.value as FilterState["majorMarathon"],
-                      })
-                    }
-                    className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-                  >
-                    <option value="">Any</option>
-                    <option value="true">Majors only</option>
-                    <option value="false">Exclude majors</option>
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-zinc-500">Major qualifier</span>
-                  <select
-                    value={filters.majorQualifier}
-                    onChange={(e) =>
-                      updateFilters({
-                        majorQualifier: e.target.value as FilterState["majorQualifier"],
-                      })
-                    }
-                    className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-                  >
-                    <option value="">Any</option>
-                    <option value="true">Qualifiers only</option>
-                    <option value="false">Exclude qualifiers</option>
-                  </select>
-                </label>
-              </div>
-            </fieldset>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={filters.majorMarathon}
+                onChange={(e) =>
+                  updateFilters({
+                    majorMarathon: e.target.value as FilterState["majorMarathon"],
+                  })
+                }
+                className={inputClass}
+                aria-label="Major marathon"
+              >
+                <option value="">Majors: any</option>
+                <option value="true">Majors only</option>
+                <option value="false">Exclude majors</option>
+              </select>
+              <select
+                value={filters.majorQualifier}
+                onChange={(e) =>
+                  updateFilters({
+                    majorQualifier: e.target.value as FilterState["majorQualifier"],
+                  })
+                }
+                className={inputClass}
+                aria-label="Major qualifier"
+              >
+                <option value="">Qualifiers: any</option>
+                <option value="true">Qualifiers only</option>
+                <option value="false">Exclude qualifiers</option>
+              </select>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setOffset(0);
+                    setFilters(EMPTY_FILTERS);
+                  }}
+                  className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </aside>
+      </section>
 
       {/* Results */}
-      <section className="min-w-0 flex-1">
+      <section>
         <div className="mb-3 flex items-baseline justify-between">
           <h1 className="text-lg font-semibold">Upcoming races</h1>
           {!loading && !error && (

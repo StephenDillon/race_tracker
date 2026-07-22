@@ -1,15 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { continents, countries, type TCountryCode } from "countries-list";
 import {
   ENTRY_STATUS_LABELS,
   ENTRY_STATUSES,
   STANDARD_DISTANCES,
+  type ContinentCode,
   type EntryStatus,
   type RaceDistance,
   type StandardDistance,
 } from "@/lib/types";
+
+const CONTINENT_OPTIONS = (
+  Object.entries(continents) as [ContinentCode, string][]
+).sort((a, b) => a[1].localeCompare(b[1]));
+
+const ALL_COUNTRIES = (Object.keys(countries) as TCountryCode[])
+  .map((code) => ({
+    code,
+    name: countries[code].name,
+    continent: countries[code].continent,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 interface CustomDistanceInput {
   label: string;
@@ -25,7 +39,8 @@ export default function SubmitRacePage() {
   const [date, setDate] = useState("");
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
-  const [country, setCountry] = useState("");
+  const [continent, setContinent] = useState<"" | ContinentCode>("");
+  const [countryCode, setCountryCode] = useState("");
   const [entryStatus, setEntryStatus] = useState<EntryStatus>("open");
   const [website, setWebsite] = useState("");
   const [description, setDescription] = useState("");
@@ -40,6 +55,14 @@ export default function SubmitRacePage() {
     setStandardDistances((prev) =>
       prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
     );
+
+  const countryOptions = useMemo(
+    () =>
+      continent
+        ? ALL_COUNTRIES.filter((c) => c.continent === continent)
+        : ALL_COUNTRIES,
+    [continent],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +98,7 @@ export default function SubmitRacePage() {
           date,
           city,
           region,
-          country,
+          countryCode,
           entryStatus,
           website,
           description,
@@ -194,7 +217,41 @@ export default function SubmitRacePage() {
           </button>
         </fieldset>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Continent</span>
+            <select
+              value={continent}
+              onChange={(e) => {
+                setContinent(e.target.value as "" | ContinentCode);
+                setCountryCode("");
+              }}
+              className={inputClass}
+            >
+              <option value="">All continents</option>
+              {CONTINENT_OPTIONS.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Country *</span>
+            <select
+              required
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Select a country…</option>
+              {countryOptions.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">City *</span>
             <input
@@ -210,15 +267,6 @@ export default function SubmitRacePage() {
               required
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Country *</span>
-            <input
-              required
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
               className={inputClass}
             />
           </label>

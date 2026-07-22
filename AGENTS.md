@@ -4,11 +4,12 @@
 
 A website to easily find races you wish to participate in. The initial focus is **running** (other sports may come later). Anyone can submit races using standard known distances (5K, 10K, Half Marathon, Marathon, 50K, 50 Mile, 100K, 100 Mile) or a custom distance if they wish.
 
-The main page shows a table of **25 upcoming races** with detailed filtering to find races, including:
+The main page shows a table of **25 upcoming races** with a filter bar above it, including:
 
+- Free-text search on race name
 - Dates / date range
 - Distance
-- Location
+- Location: continent → country selection (ISO 3166-1 alpha-2 codes via the `countries-list` package — the canonical location field is `countryCode`; the `country` display name is always derived from it server-side). State/province granularity may come later (`country-state-city` is the likely library).
 - Entry criteria (open registration, closed, ballot, waitlist, invitation, sold out)
 - Major marathon (World Marathon Majors)
 - Major qualifier (races whose results qualify for a major)
