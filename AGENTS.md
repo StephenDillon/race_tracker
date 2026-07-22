@@ -16,8 +16,14 @@ The main page shows a table of **25 upcoming races** with detailed filtering to 
 ## Stack (do not deviate without explicit approval)
 
 - **UI**: Next.js (App Router) with Tailwind CSS, in `src/app/`.
-- **Database**: Supabase — **not wired up yet**. Until credentials are provided, all data lives in a simple in-memory store (`src/lib/db/memory.ts`) seeded from `src/lib/db/seed.ts`.
-- **Deployment**: Vercel.
+- **Database**: Supabase (Postgres). The data layer auto-selects the Supabase store when `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are set, and falls back to an in-memory store (`src/lib/db/memory.ts`, seeded from `src/lib/db/seed.ts`) for local dev without credentials.
+- **Deployment**: Vercel (env vars set in the Vercel project, never committed).
+
+## Database rules
+
+- **Every table this project creates is prefixed with `rt_`** (e.g. `rt_races`). No exceptions.
+- Schema changes go in numbered SQL files under `supabase/migrations/`; seed data lives in `supabase/seed.sql`.
+- RLS is enabled on all `rt_` tables with **no policies**: the backend uses the service role key (which bypasses RLS), so nothing else can read or write the tables. Keep new tables on this pattern.
 
 ## Hard restrictions
 
@@ -38,14 +44,14 @@ src/
     types.ts            # Shared domain types (Race, RaceDistance, EntryStatus, filters) — no server imports
     db/
       store.ts          # RaceStore interface — the only contract the app depends on
-      index.ts          # getRaceStore() — swap point for the Supabase implementation later
-      memory.ts         # In-memory implementation (current)
+      index.ts          # getRaceStore() — picks Supabase (env vars set) or memory (fallback)
+      supabase.ts       # Supabase implementation (rt_races table, service role key)
+      memory.ts         # In-memory implementation (local dev fallback)
       seed.ts           # Seed races
+supabase/
+  migrations/           # SQL migrations (rt_-prefixed tables)
+  seed.sql              # Seed data for rt_races (mirrors src/lib/db/seed.ts)
 ```
-
-### Swapping in Supabase later
-
-Implement `RaceStore` (`src/lib/db/store.ts`) with the Supabase server client using `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` from server env vars, then return it from `getRaceStore()` in `src/lib/db/index.ts`. Nothing else should need to change.
 
 ## Conventions
 
