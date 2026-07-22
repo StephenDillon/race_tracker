@@ -34,8 +34,7 @@ interface RtRaceRow {
   country: string;
   country_code: string;
   entry_status: EntryStatus;
-  is_major_marathon: boolean;
-  is_major_qualifier: boolean;
+  tags: string[];
   website: string | null;
   description: string | null;
   created_at: string;
@@ -52,8 +51,7 @@ function rowToRace(row: RtRaceRow): Race {
     country: row.country,
     countryCode: row.country_code,
     entryStatus: row.entry_status,
-    isMajorMarathon: row.is_major_marathon,
-    isMajorQualifier: row.is_major_qualifier,
+    tags: row.tags ?? [],
     website: row.website ?? undefined,
     description: row.description ?? undefined,
     createdAt: row.created_at,
@@ -130,11 +128,8 @@ export class SupabaseRaceStore implements RaceStore {
       query = query.in("entry_status", filters.entryStatuses);
     }
 
-    if (filters.majorMarathon !== undefined) {
-      query = query.eq("is_major_marathon", filters.majorMarathon);
-    }
-    if (filters.majorQualifier !== undefined) {
-      query = query.eq("is_major_qualifier", filters.majorQualifier);
+    if (filters.tags && filters.tags.length > 0) {
+      query = query.overlaps("tags", filters.tags);
     }
 
     const { data, error, count } = await query
@@ -205,8 +200,7 @@ export class SupabaseRaceStore implements RaceStore {
         country: getCountryData(submission.countryCode as TCountryCode).name,
         country_code: submission.countryCode,
         entry_status: submission.entryStatus,
-        is_major_marathon: submission.isMajorMarathon,
-        is_major_qualifier: submission.isMajorQualifier,
+        tags: submission.tags ?? [],
         website: submission.website ?? null,
         description: submission.description ?? null,
       })

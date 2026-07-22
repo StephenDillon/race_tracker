@@ -59,8 +59,7 @@ export default function SubmitRacePage() {
   const [description, setDescription] = useState("");
   const [standardDistances, setStandardDistances] = useState<StandardDistance[]>([]);
   const [customDistances, setCustomDistances] = useState<CustomDistanceInput[]>([]);
-  const [isMajorMarathon, setIsMajorMarathon] = useState(false);
-  const [isMajorQualifier, setIsMajorQualifier] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,8 +115,7 @@ export default function SubmitRacePage() {
           website,
           description,
           distances,
-          isMajorMarathon,
-          isMajorQualifier,
+          tags,
         }),
       });
       const data = await res.json();
@@ -311,28 +309,27 @@ export default function SubmitRacePage() {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="major-marathon"
-              checked={isMajorMarathon}
-              onCheckedChange={(v) => setIsMajorMarathon(v === true)}
-            />
-            <Label htmlFor="major-marathon" className="font-normal">
-              World Marathon Major
-            </Label>
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">Tags</legend>
+          <div className="flex flex-col gap-3">
+            {["World Major", "World Major Qualifier"].map((tag) => (
+              <div key={tag} className="flex items-center gap-2">
+                <Checkbox
+                  id={`tag-${tag}`}
+                  checked={tags.includes(tag)}
+                  onCheckedChange={(checked) =>
+                    setTags((prev) =>
+                      checked ? [...prev, tag] : prev.filter((t) => t !== tag),
+                    )
+                  }
+                />
+                <Label htmlFor={`tag-${tag}`} className="font-normal">
+                  {tag}
+                </Label>
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="major-qualifier"
-              checked={isMajorQualifier}
-              onCheckedChange={(v) => setIsMajorQualifier(v === true)}
-            />
-            <Label htmlFor="major-qualifier" className="font-normal">
-              Major qualifier (results usable to qualify for a major)
-            </Label>
-          </div>
-        </div>
+        </fieldset>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="race-website">Website</Label>

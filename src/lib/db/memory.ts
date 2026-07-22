@@ -67,15 +67,9 @@ export class MemoryRaceStore implements RaceStore {
         }
 
         if (
-          filters.majorMarathon !== undefined &&
-          race.isMajorMarathon !== filters.majorMarathon
-        ) {
-          return false;
-        }
-
-        if (
-          filters.majorQualifier !== undefined &&
-          race.isMajorQualifier !== filters.majorQualifier
+          filters.tags &&
+          filters.tags.length > 0 &&
+          !filters.tags.some((t) => race.tags.includes(t))
         ) {
           return false;
         }

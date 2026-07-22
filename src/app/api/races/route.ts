@@ -17,12 +17,6 @@ export const dynamic = "force-dynamic";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function parseBoolean(value: string | null): boolean | undefined {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return undefined;
-}
-
 /**
  * GET /api/races — list races with filters.
  *
@@ -93,8 +87,7 @@ export async function GET(request: NextRequest) {
     countryCodes,
     cities,
     entryStatuses,
-    majorMarathon: parseBoolean(params.get("majorMarathon")),
-    majorQualifier: parseBoolean(params.get("majorQualifier")),
+    tags: params.get("tags")?.split(",").filter(Boolean),
     limit: Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 25,
     offset: Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0,
   };
@@ -167,8 +160,7 @@ function validateSubmission(body: unknown): RaceSubmission | string {
     region: (b.region as string).trim(),
     countryCode,
     entryStatus: b.entryStatus as EntryStatus,
-    isMajorMarathon: b.isMajorMarathon === true,
-    isMajorQualifier: b.isMajorQualifier === true,
+    tags: Array.isArray(b.tags) ? (b.tags as unknown[]).filter((t): t is string => typeof t === "string") : [],
     website: typeof b.website === "string" && b.website.trim() ? b.website.trim() : undefined,
     description:
       typeof b.description === "string" && b.description.trim()

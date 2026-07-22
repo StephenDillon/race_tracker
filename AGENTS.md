@@ -11,8 +11,7 @@ The main page shows a table of **25 upcoming races** with a filter bar above it,
 - Distance
 - Location: continent → country selection (ISO 3166-1 alpha-2 codes via the `countries-list` package — the canonical location field is `countryCode`; the `country` display name is always derived from it server-side). State/province granularity may come later (`country-state-city` is the likely library).
 - Entry criteria (open registration, closed, ballot, waitlist, invitation, sold out)
-- Major marathon (World Marathon Majors)
-- Major qualifier (races whose results qualify for a major)
+- Tags (e.g. World Major, World Major Qualifier)
 
 ## Stack (do not deviate without explicit approval)
 

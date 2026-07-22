@@ -56,10 +56,7 @@ export interface Race {
   /** ISO 3166-1 alpha-2 code (e.g. "US"). Canonical location field for filtering. */
   countryCode: string;
   entryStatus: EntryStatus;
-  /** One of the World Marathon Majors (Boston, London, Berlin, Chicago, NYC, Tokyo, Sydney). */
-  isMajorMarathon: boolean;
-  /** Results can be used to qualify for a major (e.g. Boston Qualifier certified course). */
-  isMajorQualifier: boolean;
+  tags: string[];
   website?: string;
   description?: string;
   /** Set by the server on submission. */
@@ -93,8 +90,7 @@ export interface RaceFilters {
   cities?: string[];
   /** Match any of these entry statuses. */
   entryStatuses?: EntryStatus[];
-  majorMarathon?: boolean;
-  majorQualifier?: boolean;
+  tags?: string[];
   /** Max results per page. Defaults to 25 on the main page. */
   limit?: number;
   offset?: number;

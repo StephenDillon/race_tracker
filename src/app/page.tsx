@@ -51,7 +51,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import type { CityResult } from "@/lib/types";
 
@@ -79,8 +79,8 @@ interface FilterState {
   distances: StandardDistance[];
   locations: LocationPick[];
   entryStatuses: EntryStatus[];
-  majorMarathon: boolean;
-  majorQualifier: boolean;
+
+
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -92,8 +92,8 @@ const EMPTY_FILTERS: FilterState = {
   distances: [],
   locations: [],
   entryStatuses: [],
-  majorMarathon: false,
-  majorQualifier: false,
+
+
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -422,8 +422,8 @@ export default function HomePage() {
       if (cities.length) params.set("cities", cities.join(","));
       if (f.entryStatuses.length)
         params.set("entryStatuses", f.entryStatuses.join(","));
-      if (f.majorMarathon) params.set("majorMarathon", "true");
-      if (f.majorQualifier) params.set("majorQualifier", "true");
+
+
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(pageOffset));
 
@@ -453,8 +453,6 @@ export default function HomePage() {
     filters.distances,
     filters.locations,
     filters.entryStatuses,
-    filters.majorMarathon,
-    filters.majorQualifier,
     offset,
   ]);
 
@@ -626,26 +624,8 @@ export default function HomePage() {
                   noun="entry types"
                   ariaLabel="Entry types"
                 />
-                <div className="flex flex-col gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={filters.majorMarathon}
-                      onCheckedChange={(v) =>
-                        updateFilters({ majorMarathon: v === true })
-                      }
-                    />
-                    Majors only
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={filters.majorQualifier}
-                      onCheckedChange={(v) =>
-                        updateFilters({ majorQualifier: v === true })
-                      }
-                    />
-                    Qualifiers only
-                  </label>
-                </div>
+
+
               </div>
             </FilterGroup>
           </div>
@@ -679,7 +659,7 @@ export default function HomePage() {
                   <TableHead>Distances</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Entry</TableHead>
-                  <TableHead>Major</TableHead>
+                  <TableHead>Tags</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -733,13 +713,19 @@ export default function HomePage() {
                           {ENTRY_STATUS_LABELS[race.entryStatus]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {race.isMajorMarathon && (
-                          <span title="World Marathon Major">🌟 Major</span>
-                        )}
-                        {race.isMajorMarathon && race.isMajorQualifier && " · "}
-                        {race.isMajorQualifier && (
-                          <span title="Major qualifier course">✅ Qualifier</span>
+                      <TableCell>
+                        {(race.tags ?? []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(race.tags ?? []).map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="whitespace-nowrap text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
