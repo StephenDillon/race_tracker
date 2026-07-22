@@ -147,7 +147,7 @@ function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
-    day: "numeric",
+    day: "2-digit",
   });
 }
 
@@ -751,7 +751,7 @@ export default function HomePage() {
                 ) : (
                   races.map((race) => (
                     <TableRow key={race.id}>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap font-mono text-sm">
                         {formatDate(race.date)}
                       </TableCell>
                       <TableCell className="font-medium">
