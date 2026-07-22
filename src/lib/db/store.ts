@@ -1,6 +1,7 @@
 import "server-only";
 
 import type {
+  CityResult,
   Race,
   RaceFilters,
   RaceListResult,
@@ -17,4 +18,6 @@ export interface RaceStore {
   listRaces(filters: RaceFilters): Promise<RaceListResult>;
   getRace(id: string): Promise<Race | null>;
   createRace(submission: RaceSubmission): Promise<Race>;
+  /** Distinct cities (with their country) whose name matches `q`. */
+  searchCities(q: string, limit: number): Promise<CityResult[]>;
 }

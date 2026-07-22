@@ -3,6 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { countries, getCountryData, type TCountryCode } from "countries-list";
 import type {
+  CityResult,
   EntryStatus,
   Race,
   RaceDistance,
@@ -64,10 +65,10 @@ function sanitizeSearchTerm(term: string): string {
   return term.replace(/[,()%\\]/g, " ").trim();
 }
 
-/** All ISO country codes belonging to a continent (e.g. "EU"). */
-function continentCountryCodes(continent: string): string[] {
-  return (Object.keys(countries) as TCountryCode[]).filter(
-    (code) => countries[code].continent === continent,
+/** All ISO country codes belonging to any of the given continents. */
+function continentCountryCodes(codes: string[]): string[] {
+  return (Object.keys(countries) as TCountryCode[]).filter((code) =>
+    codes.includes(countries[code].continent),
   );
 }
 
@@ -101,10 +102,28 @@ export class SupabaseRaceStore implements RaceStore {
       if (term) query = query.ilike("name", `%${term}%`);
     }
 
-    if (filters.countryCode) {
-      query = query.eq("country_code", filters.countryCode);
-    } else if (filters.continent) {
-      query = query.in("country_code", continentCountryCodes(filters.continent));
+    // Location filters are OR-ed: continent selections expand to country
+    // codes and merge with explicit countries; cities OR onto that.
+    const codeSet = new Set<string>(filters.countryCodes ?? []);
+    if (filters.continents && filters.continents.length > 0) {
+      for (const code of continentCountryCodes(filters.continents)) {
+        codeSet.add(code);
+      }
+    }
+    const codes = [...codeSet];
+    // PostgREST `or` strings are comma/paren delimited, so strip those from
+    // user-supplied city names; quote each value to survive spaces.
+    const cities = (filters.cities ?? []).map(
+      (c) => `"${c.replace(/[,()"\\]/g, " ").trim()}"`,
+    );
+    if (codes.length > 0 && cities.length > 0) {
+      query = query.or(
+        `country_code.in.(${codes.join(",")}),city.in.(${cities.join(",")})`,
+      );
+    } else if (codes.length > 0) {
+      query = query.in("country_code", codes);
+    } else if (cities.length > 0) {
+      query = query.or(`city.in.(${cities.join(",")})`);
     }
 
     if (filters.entryStatuses && filters.entryStatuses.length > 0) {
@@ -129,6 +148,35 @@ export class SupabaseRaceStore implements RaceStore {
       races: (data as RtRaceRow[]).map(rowToRace),
       total: count ?? 0,
     };
+  }
+
+  async searchCities(q: string, limit: number): Promise<CityResult[]> {
+    const term = sanitizeSearchTerm(q);
+    if (!term) return [];
+
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select("city, country, country_code")
+      .ilike("city", `%${term}%`)
+      .limit(200);
+
+    if (error) throw new Error(`Failed to search cities: ${error.message}`);
+
+    const seen = new Set<string>();
+    const results: CityResult[] = [];
+    for (const row of data as Pick<RtRaceRow, "city" | "country" | "country_code">[]) {
+      const key = `${row.city.toLowerCase()}|${row.country_code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push({
+        city: row.city,
+        country: row.country,
+        countryCode: row.country_code,
+      });
+    }
+    return results
+      .sort((a, b) => a.city.localeCompare(b.city))
+      .slice(0, limit);
   }
 
   async getRace(id: string): Promise<Race | null> {

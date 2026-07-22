@@ -30,8 +30,9 @@ function parseBoolean(value: string | null): boolean | undefined {
  *   q                  free-text search on race name
  *   dateFrom, dateTo   ISO dates (dateFrom defaults to today)
  *   distances          comma-separated standard distances (e.g. "5K,Marathon")
- *   continent          continent code (AF, AN, AS, EU, NA, OC, SA)
- *   country            ISO 3166-1 alpha-2 country code (e.g. "US"); wins over continent
+ *   continents         comma-separated continent codes (AF, AN, AS, EU, NA, OC, SA)
+ *   countries          comma-separated ISO 3166-1 alpha-2 codes (e.g. "US,CA")
+ *   cities             comma-separated city names; continents/countries/cities are OR-ed
  *   entryStatuses      comma-separated entry statuses (e.g. "open,ballot")
  *   majorMarathon      "true" | "false"
  *   majorQualifier     "true" | "false"
@@ -63,15 +64,22 @@ export async function GET(request: NextRequest) {
       (ENTRY_STATUSES as readonly string[]).includes(s),
     );
 
-  const continentParam = params.get("continent") ?? undefined;
-  const continent =
-    continentParam && continentParam in continents
-      ? (continentParam as ContinentCode)
-      : undefined;
+  const continentsParam = params
+    .get("continents")
+    ?.split(",")
+    .filter((c): c is ContinentCode => c in continents);
 
-  const countryParam = params.get("country")?.toUpperCase() ?? undefined;
-  const countryCode =
-    countryParam && countryParam in countries ? countryParam : undefined;
+  const countryCodes = params
+    .get("countries")
+    ?.split(",")
+    .map((c) => c.toUpperCase())
+    .filter((c) => c in countries);
+
+  const cities = params
+    .get("cities")
+    ?.split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
 
   const limitParam = Number(params.get("limit") ?? 25);
   const offsetParam = Number(params.get("offset") ?? 0);
@@ -81,8 +89,9 @@ export async function GET(request: NextRequest) {
     dateFrom,
     dateTo,
     distances,
-    continent,
-    countryCode,
+    continents: continentsParam,
+    countryCodes,
+    cities,
     entryStatuses,
     majorMarathon: parseBoolean(params.get("majorMarathon")),
     majorQualifier: parseBoolean(params.get("majorQualifier")),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { continents, countries, type TCountryCode } from "countries-list";
 import {
   ENTRY_STATUS_LABELS,
@@ -37,14 +37,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ChevronDownIcon } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import type { CityResult } from "@/lib/types";
 
 const PAGE_SIZE = 25;
 
 // Radix Select items cannot have an empty-string value, so "any" stands in
 // for the unset state everywhere a select is optional.
 const ANY = "any";
+
+/** One picked location filter: a continent, a country, or a city. */
+interface LocationPick {
+  kind: "continent" | "country" | "city";
+  /** Continent code, ISO country code, or city name. */
+  value: string;
+  label: string;
+}
 
 interface FilterState {
   q: string;
@@ -54,11 +77,10 @@ interface FilterState {
   year: string;
   month: string; // "1"–"12"
   distances: StandardDistance[];
-  continent: "" | ContinentCode;
-  country: string; // ISO code or ""
+  locations: LocationPick[];
   entryStatuses: EntryStatus[];
-  majorMarathon: "" | "true" | "false";
-  majorQualifier: "" | "true" | "false";
+  majorMarathon: boolean;
+  majorQualifier: boolean;
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -68,11 +90,10 @@ const EMPTY_FILTERS: FilterState = {
   year: "",
   month: "",
   distances: [],
-  continent: "",
-  country: "",
+  locations: [],
   entryStatuses: [],
-  majorMarathon: "",
-  majorQualifier: "",
+  majorMarathon: false,
+  majorQualifier: false,
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -153,6 +174,217 @@ function FilterGroup({
   );
 }
 
+/**
+ * Search-driven location picker. Continents and countries are static lists;
+ * cities are looked up from the race data as you type. Selections are chips
+ * below the trigger and OR-combine in the filter.
+ */
+function LocationSearch({
+  selected,
+  onChange,
+}: {
+  selected: LocationPick[];
+  onChange: (next: LocationPick[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [cityResults, setCityResults] = useState<CityResult[]>([]);
+
+  // Debounced city lookup against the race data.
+  useEffect(() => {
+    if (!query.trim()) {
+      setCityResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/races/cities?q=${encodeURIComponent(query.trim())}`,
+        );
+        if (res.ok) {
+          const data: { cities: CityResult[] } = await res.json();
+          setCityResults(data.cities);
+        }
+      } catch {
+        // Typeahead only — ignore lookup failures.
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const isSelected = (kind: LocationPick["kind"], value: string) =>
+    selected.some((s) => s.kind === kind && s.value === value);
+
+  const toggle = (pick: LocationPick) =>
+    onChange(
+      isSelected(pick.kind, pick.value)
+        ? selected.filter(
+            (s) => !(s.kind === pick.kind && s.value === pick.value),
+          )
+        : [...selected, pick],
+    );
+
+  const item = (pick: LocationPick, key: string, cmdkValue: string) => (
+    <CommandItem key={key} value={cmdkValue} onSelect={() => toggle(pick)}>
+      <CheckIcon
+        className={
+          isSelected(pick.kind, pick.value) ? "opacity-100" : "opacity-0"
+        }
+      />
+      {pick.label}
+    </CommandItem>
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-between font-normal"
+            aria-label="Locations"
+          >
+            <span className="truncate">
+              {selected.length === 0
+                ? "All locations"
+                : selected.length === 1
+                  ? selected[0].label
+                  : `${selected.length} locations`}
+            </span>
+            <ChevronDownIcon className="text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-0" align="start">
+          <Command>
+            <CommandInput
+              placeholder="Search continent, country, or city…"
+              value={query}
+              onValueChange={setQuery}
+            />
+            <CommandList>
+              <CommandEmpty>No locations found.</CommandEmpty>
+              <CommandGroup heading="Continents">
+                {CONTINENT_OPTIONS.map(([code, name]) =>
+                  item(
+                    { kind: "continent", value: code, label: name },
+                    `continent-${code}`,
+                    name,
+                  ),
+                )}
+              </CommandGroup>
+              <CommandGroup heading="Countries">
+                {ALL_COUNTRIES.map((c) =>
+                  item(
+                    { kind: "country", value: c.code, label: c.name },
+                    `country-${c.code}`,
+                    c.name,
+                  ),
+                )}
+              </CommandGroup>
+              {cityResults.length > 0 && (
+                <CommandGroup heading="Cities">
+                  {cityResults.map((c) =>
+                    item(
+                      {
+                        kind: "city",
+                        value: c.city,
+                        label: `${c.city}, ${c.country}`,
+                      },
+                      `city-${c.city}-${c.countryCode}`,
+                      `${c.city}, ${c.country}`,
+                    ),
+                  )}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {selected.map((s) => (
+            <Badge
+              key={`${s.kind}-${s.value}`}
+              variant="secondary"
+              className="gap-1 pr-1"
+            >
+              {s.label}
+              <button
+                type="button"
+                aria-label={`Remove ${s.label}`}
+                className="rounded-full hover:text-destructive"
+                onClick={() => toggle(s)}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Checkbox-list dropdown; an empty selection means "no filter" (show all). */
+function MultiSelect<T extends string>({
+  options,
+  selected,
+  onChange,
+  allLabel,
+  noun,
+  ariaLabel,
+}: {
+  options: { value: T; label: string }[];
+  selected: T[];
+  onChange: (next: T[]) => void;
+  /** Trigger text when nothing is selected, e.g. "All entry types". */
+  allLabel: string;
+  /** Plural noun for the multi-selection summary, e.g. "entry types". */
+  noun: string;
+  ariaLabel: string;
+}) {
+  const triggerText =
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+        ? (options.find((o) => o.value === selected[0])?.label ?? selected[0])
+        : `${selected.length} ${noun}`;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          className="w-full justify-between font-normal"
+          aria-label={ariaLabel}
+        >
+          <span className="truncate">{triggerText}</span>
+          <ChevronDownIcon className="text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="max-h-72 w-56 overflow-y-auto" align="start">
+        {options.map((o) => (
+          <DropdownMenuCheckboxItem
+            key={o.value}
+            checked={selected.includes(o.value)}
+            onCheckedChange={(checked) =>
+              onChange(
+                checked
+                  ? [...selected, o.value]
+                  : selected.filter((x) => x !== o.value),
+              )
+            }
+            // Keep the menu open while picking multiple options.
+            onSelect={(e) => e.preventDefault()}
+          >
+            {o.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [races, setRaces] = useState<Race[]>([]);
@@ -178,12 +410,20 @@ export default function HomePage() {
       if (f.dateFrom) params.set("dateFrom", f.dateFrom);
       if (f.dateTo) params.set("dateTo", f.dateTo);
       if (f.distances.length) params.set("distances", f.distances.join(","));
-      if (f.country) params.set("country", f.country);
-      else if (f.continent) params.set("continent", f.continent);
+      const byKind = (kind: LocationPick["kind"]) =>
+        f.locations.filter((l) => l.kind === kind).map((l) => l.value);
+      const [continents, countryCodes, cities] = [
+        byKind("continent"),
+        byKind("country"),
+        byKind("city"),
+      ];
+      if (continents.length) params.set("continents", continents.join(","));
+      if (countryCodes.length) params.set("countries", countryCodes.join(","));
+      if (cities.length) params.set("cities", cities.join(","));
       if (f.entryStatuses.length)
         params.set("entryStatuses", f.entryStatuses.join(","));
-      if (f.majorMarathon) params.set("majorMarathon", f.majorMarathon);
-      if (f.majorQualifier) params.set("majorQualifier", f.majorQualifier);
+      if (f.majorMarathon) params.set("majorMarathon", "true");
+      if (f.majorQualifier) params.set("majorQualifier", "true");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(pageOffset));
 
@@ -211,8 +451,7 @@ export default function HomePage() {
     filters.dateFrom,
     filters.dateTo,
     filters.distances,
-    filters.continent,
-    filters.country,
+    filters.locations,
     filters.entryStatuses,
     filters.majorMarathon,
     filters.majorQualifier,
@@ -223,14 +462,6 @@ export default function HomePage() {
     setOffset(0);
     setFilters((prev) => ({ ...prev, ...patch }));
   };
-
-  const countryOptions = useMemo(
-    () =>
-      filters.continent
-        ? ALL_COUNTRIES.filter((c) => c.continent === filters.continent)
-        : ALL_COUNTRIES,
-    [filters.continent],
-  );
 
   const hasActiveFilters =
     JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
@@ -284,89 +515,6 @@ export default function HomePage() {
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-            </FilterGroup>
-
-            <FilterGroup label="Location">
-              <div className="flex flex-col gap-2">
-                <Select
-                  value={filters.continent || ANY}
-                  onValueChange={(v) =>
-                    updateFilters({
-                      continent:
-                        v === ANY ? "" : (v as FilterState["continent"]),
-                      country: "",
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-full" aria-label="Continent">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ANY}>All continents</SelectItem>
-                    {CONTINENT_OPTIONS.map(([code, name]) => (
-                      <SelectItem key={code} value={code}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={filters.country || ANY}
-                  onValueChange={(v) =>
-                    updateFilters({ country: v === ANY ? "" : v })
-                  }
-                >
-                  <SelectTrigger className="w-full" aria-label="Country">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ANY}>All countries</SelectItem>
-                    {countryOptions.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </FilterGroup>
-
-            <FilterGroup label="Entry">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between font-normal"
-                    aria-label="Entry types"
-                  >
-                    {filters.entryStatuses.length === 0
-                      ? "All entry types"
-                      : filters.entryStatuses.length === 1
-                        ? ENTRY_STATUS_LABELS[filters.entryStatuses[0]]
-                        : `${filters.entryStatuses.length} entry types`}
-                    <ChevronDownIcon className="text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-                  {ENTRY_STATUSES.map((s) => (
-                    <DropdownMenuCheckboxItem
-                      key={s}
-                      checked={filters.entryStatuses.includes(s)}
-                      onCheckedChange={(checked) =>
-                        updateFilters({
-                          entryStatuses: checked
-                            ? [...filters.entryStatuses, s]
-                            : filters.entryStatuses.filter((x) => x !== s),
-                        })
-                      }
-                      // Keep the menu open while picking multiple statuses.
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {ENTRY_STATUS_LABELS[s]}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
             </FilterGroup>
 
             <FilterGroup label="Dates">
@@ -461,45 +609,42 @@ export default function HomePage() {
               </div>
             </FilterGroup>
 
-            <FilterGroup label="Additional">
-              <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <Select
-                    value={filters.majorMarathon || ANY}
-                    onValueChange={(v) =>
-                      updateFilters({
-                        majorMarathon:
-                          v === ANY ? "" : (v as FilterState["majorMarathon"]),
-                      })
-                    }
-                  >
-                    <SelectTrigger className="w-full" aria-label="Major marathon">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ANY}>Majors: any</SelectItem>
-                      <SelectItem value="true">Majors only</SelectItem>
-                      <SelectItem value="false">Exclude majors</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={filters.majorQualifier || ANY}
-                    onValueChange={(v) =>
-                      updateFilters({
-                        majorQualifier:
-                          v === ANY ? "" : (v as FilterState["majorQualifier"]),
-                      })
-                    }
-                  >
-                    <SelectTrigger className="w-full" aria-label="Major qualifier">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ANY}>Qualifiers: any</SelectItem>
-                      <SelectItem value="true">Qualifiers only</SelectItem>
-                      <SelectItem value="false">Exclude qualifiers</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <FilterGroup label="Filters">
+              <div className="flex flex-col gap-3">
+                <LocationSearch
+                  selected={filters.locations}
+                  onChange={(locations) => updateFilters({ locations })}
+                />
+                <MultiSelect
+                  options={ENTRY_STATUSES.map((s) => ({
+                    value: s,
+                    label: ENTRY_STATUS_LABELS[s],
+                  }))}
+                  selected={filters.entryStatuses}
+                  onChange={(entryStatuses) => updateFilters({ entryStatuses })}
+                  allLabel="All entry types"
+                  noun="entry types"
+                  ariaLabel="Entry types"
+                />
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={filters.majorMarathon}
+                      onCheckedChange={(v) =>
+                        updateFilters({ majorMarathon: v === true })
+                      }
+                    />
+                    Majors only
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={filters.majorQualifier}
+                      onCheckedChange={(v) =>
+                        updateFilters({ majorQualifier: v === true })
+                      }
+                    />
+                    Qualifiers only
+                  </label>
                 </div>
               </div>
             </FilterGroup>

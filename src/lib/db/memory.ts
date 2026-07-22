@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { countries, type TCountryCode } from "countries-list";
 import type {
+  CityResult,
   Race,
   RaceFilters,
   RaceListResult,
@@ -41,11 +42,20 @@ export class MemoryRaceStore implements RaceStore {
           if (!hasDistance) return false;
         }
 
-        if (filters.countryCode) {
-          if (race.countryCode !== filters.countryCode) return false;
-        } else if (filters.continent) {
-          const country = countries[race.countryCode as TCountryCode];
-          if (country?.continent !== filters.continent) return false;
+        const hasLocationFilter =
+          (filters.continents?.length ?? 0) > 0 ||
+          (filters.countryCodes?.length ?? 0) > 0 ||
+          (filters.cities?.length ?? 0) > 0;
+        if (hasLocationFilter) {
+          const continent =
+            countries[race.countryCode as TCountryCode]?.continent;
+          const matchesLocation =
+            (continent && filters.continents?.includes(continent)) ||
+            filters.countryCodes?.includes(race.countryCode) ||
+            filters.cities?.some(
+              (c) => c.toLowerCase() === race.city.toLowerCase(),
+            );
+          if (!matchesLocation) return false;
         }
 
         if (
@@ -81,6 +91,28 @@ export class MemoryRaceStore implements RaceStore {
       races: matches.slice(offset, offset + limit),
       total: matches.length,
     };
+  }
+
+  async searchCities(q: string, limit: number): Promise<CityResult[]> {
+    const term = q.trim().toLowerCase();
+    if (!term) return [];
+
+    const seen = new Set<string>();
+    const results: CityResult[] = [];
+    for (const race of this.races) {
+      if (!race.city.toLowerCase().includes(term)) continue;
+      const key = `${race.city.toLowerCase()}|${race.countryCode}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push({
+        city: race.city,
+        country: race.country,
+        countryCode: race.countryCode,
+      });
+    }
+    return results
+      .sort((a, b) => a.city.localeCompare(b.city))
+      .slice(0, limit);
   }
 
   async getRace(id: string): Promise<Race | null> {

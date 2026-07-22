@@ -82,10 +82,15 @@ export interface RaceFilters {
   dateTo?: string;
   /** Match any of these standard distances. */
   distances?: StandardDistance[];
-  /** Filter to a continent (ignored when countryCode is set). */
-  continent?: ContinentCode;
-  /** Filter to a single country (ISO 3166-1 alpha-2). */
-  countryCode?: string;
+  /**
+   * Location filters. A race matches when it is in any selected continent OR
+   * any selected country OR any selected city (the three lists are OR-ed).
+   */
+  continents?: ContinentCode[];
+  /** ISO 3166-1 alpha-2 codes. */
+  countryCodes?: string[];
+  /** Exact city names (case-insensitive). */
+  cities?: string[];
   /** Match any of these entry statuses. */
   entryStatuses?: EntryStatus[];
   majorMarathon?: boolean;
@@ -98,4 +103,12 @@ export interface RaceFilters {
 export interface RaceListResult {
   races: Race[];
   total: number;
+}
+
+/** A distinct city that hosts at least one race, for location search. */
+export interface CityResult {
+  city: string;
+  /** Display name, e.g. "Germany". */
+  country: string;
+  countryCode: string;
 }
