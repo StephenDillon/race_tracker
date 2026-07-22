@@ -16,7 +16,7 @@ The main page shows a table of **25 upcoming races** with a filter bar above it,
 
 ## Stack (do not deviate without explicit approval)
 
-- **UI**: Next.js (App Router) with Tailwind CSS, in `src/app/`.
+- **UI**: Next.js (App Router) with Tailwind CSS, in `src/app/`. Components come from **shadcn/ui** (vendored into `src/components/ui/`, configured via `components.json`) — use/add shadcn components rather than hand-rolling styled elements.
 - **Database**: Supabase (Postgres). The data layer auto-selects the Supabase store when `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are set, and falls back to an in-memory store (`src/lib/db/memory.ts`, seeded from `src/lib/db/seed.ts`) for local dev without credentials.
 - **Deployment**: Vercel (env vars set in the Vercel project, never committed).
 

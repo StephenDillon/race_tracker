@@ -12,6 +12,19 @@ import {
   type RaceDistance,
   type StandardDistance,
 } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const CONTINENT_OPTIONS = (
   Object.entries(continents) as [ContinentCode, string][]
@@ -25,13 +38,13 @@ const ALL_COUNTRIES = (Object.keys(countries) as TCountryCode[])
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
+// Radix Select items cannot have an empty-string value.
+const ANY = "any";
+
 interface CustomDistanceInput {
   label: string;
   kilometers: string;
 }
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 
 export default function SubmitRacePage() {
   const router = useRouter();
@@ -50,11 +63,6 @@ export default function SubmitRacePage() {
   const [isMajorQualifier, setIsMajorQualifier] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const toggleStandard = (d: StandardDistance) =>
-    setStandardDistances((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
-    );
 
   const countryOptions = useMemo(
     () =>
@@ -85,6 +93,11 @@ export default function SubmitRacePage() {
 
     if (distances.length === 0) {
       setError("Select at least one distance (standard or custom).");
+      return;
+    }
+
+    if (!countryCode) {
+      setError("Select a country.");
       return;
     }
 
@@ -121,55 +134,54 @@ export default function SubmitRacePage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-lg font-semibold">Submit a race</h1>
-      <p className="mb-6 text-sm text-zinc-500">
+      <p className="mb-6 text-sm text-muted-foreground">
         Anyone can submit a race. Pick standard distances or add a custom one.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Race name *</span>
-          <input
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="race-name">Race name *</Label>
+          <Input
+            id="race-name"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Riverside Autumn Half"
-            className={inputClass}
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Race date *</span>
-          <input
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="race-date">Race date *</Label>
+          <Input
+            id="race-date"
             required
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className={inputClass}
           />
-        </label>
+        </div>
 
-        <fieldset className="text-sm">
-          <legend className="mb-2 font-medium">Distances *</legend>
-          <div className="mb-3 flex flex-wrap gap-1.5">
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">Distances *</legend>
+          <ToggleGroup
+            type="multiple"
+            variant="outline"
+            size="sm"
+            spacing={1}
+            className="mb-3 flex-wrap"
+            value={standardDistances}
+            onValueChange={(v) => setStandardDistances(v as StandardDistance[])}
+          >
             {STANDARD_DISTANCES.map((d) => (
-              <button
-                type="button"
-                key={d}
-                onClick={() => toggleStandard(d)}
-                className={`rounded-full border px-3 py-1 text-xs ${
-                  standardDistances.includes(d)
-                    ? "border-emerald-600 bg-emerald-600 text-white"
-                    : "border-zinc-300 hover:border-emerald-500 dark:border-zinc-700"
-                }`}
-              >
+              <ToggleGroupItem key={d} value={d}>
                 {d}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
 
           {customDistances.map((c, i) => (
             <div key={i} className="mb-2 flex items-center gap-2">
-              <input
+              <Input
                 value={c.label}
                 onChange={(e) =>
                   setCustomDistances((prev) =>
@@ -177,9 +189,8 @@ export default function SubmitRacePage() {
                   )
                 }
                 placeholder="Custom distance name (e.g. 7.7K trail loop)"
-                className={inputClass}
               />
-              <input
+              <Input
                 type="number"
                 min="0.1"
                 step="0.1"
@@ -192,157 +203,168 @@ export default function SubmitRacePage() {
                   )
                 }
                 placeholder="km"
-                className={`${inputClass} w-24`}
+                className="w-24"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() =>
                   setCustomDistances((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="text-zinc-400 hover:text-rose-600"
                 aria-label="Remove custom distance"
               >
                 ✕
-              </button>
+              </Button>
             </div>
           ))}
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            className="px-0"
             onClick={() =>
               setCustomDistances((prev) => [...prev, { label: "", kilometers: "" }])
             }
-            className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
           >
             + Add custom distance
-          </button>
+          </Button>
         </fieldset>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Continent</span>
-            <select
-              value={continent}
-              onChange={(e) => {
-                setContinent(e.target.value as "" | ContinentCode);
+          <div className="flex flex-col gap-2">
+            <Label>Continent</Label>
+            <Select
+              value={continent || ANY}
+              onValueChange={(v) => {
+                setContinent(v === ANY ? "" : (v as ContinentCode));
                 setCountryCode("");
               }}
-              className={inputClass}
             >
-              <option value="">All continents</option>
-              {CONTINENT_OPTIONS.map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Country *</span>
-            <select
-              required
-              value={countryCode}
-              onChange={(e) => setCountryCode(e.target.value)}
-              className={inputClass}
+              <SelectTrigger className="w-full" aria-label="Continent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>All continents</SelectItem>
+                {CONTINENT_OPTIONS.map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Country *</Label>
+            <Select
+              value={countryCode || undefined}
+              onValueChange={setCountryCode}
             >
-              <option value="">Select a country…</option>
-              {countryOptions.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">City *</span>
-            <input
+              <SelectTrigger className="w-full" aria-label="Country">
+                <SelectValue placeholder="Select a country…" />
+              </SelectTrigger>
+              <SelectContent>
+                {countryOptions.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="race-city">City *</Label>
+            <Input
+              id="race-city"
               required
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className={inputClass}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Region / State *</span>
-            <input
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="race-region">Region / State *</Label>
+            <Input
+              id="race-region"
               required
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              className={inputClass}
             />
-          </label>
+          </div>
         </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Entry status *</span>
-          <select
+        <div className="flex flex-col gap-2">
+          <Label>Entry status *</Label>
+          <Select
             value={entryStatus}
-            onChange={(e) => setEntryStatus(e.target.value as EntryStatus)}
-            className={inputClass}
+            onValueChange={(v) => setEntryStatus(v as EntryStatus)}
           >
-            {ENTRY_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {ENTRY_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="flex flex-col gap-2 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={isMajorMarathon}
-              onChange={(e) => setIsMajorMarathon(e.target.checked)}
-              className="accent-emerald-600"
-            />
-            World Marathon Major
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={isMajorQualifier}
-              onChange={(e) => setIsMajorQualifier(e.target.checked)}
-              className="accent-emerald-600"
-            />
-            Major qualifier (results usable to qualify for a major)
-          </label>
+            <SelectTrigger className="w-full" aria-label="Entry status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ENTRY_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {ENTRY_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Website</span>
-          <input
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="major-marathon"
+              checked={isMajorMarathon}
+              onCheckedChange={(v) => setIsMajorMarathon(v === true)}
+            />
+            <Label htmlFor="major-marathon" className="font-normal">
+              World Marathon Major
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="major-qualifier"
+              checked={isMajorQualifier}
+              onCheckedChange={(v) => setIsMajorQualifier(v === true)}
+            />
+            <Label htmlFor="major-qualifier" className="font-normal">
+              Major qualifier (results usable to qualify for a major)
+            </Label>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="race-website">Website</Label>
+          <Input
+            id="race-website"
             type="url"
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="https://…"
-            className={inputClass}
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Description</span>
-          <textarea
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="race-description">Description</Label>
+          <Textarea
+            id="race-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder="Course profile, atmosphere, anything runners should know."
-            className={inputClass}
           />
-        </label>
+        </div>
 
         {error && (
-          <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={submitting}>
           {submitting ? "Submitting…" : "Submit race"}
-        </button>
+        </Button>
       </form>
     </div>
   );

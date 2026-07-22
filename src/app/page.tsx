@@ -12,13 +12,47 @@ import {
   type RaceDistance,
   type StandardDistance,
 } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ChevronDownIcon } from "lucide-react";
 
 const PAGE_SIZE = 25;
+
+// Radix Select items cannot have an empty-string value, so "any" stands in
+// for the unset state everywhere a select is optional.
+const ANY = "any";
 
 interface FilterState {
   q: string;
   dateFrom: string;
   dateTo: string;
+  // Year/month quick picks — UI sugar that fills dateFrom/dateTo.
+  year: string;
+  month: string; // "1"–"12"
   distances: StandardDistance[];
   continent: "" | ContinentCode;
   country: string; // ISO code or ""
@@ -31,6 +65,8 @@ const EMPTY_FILTERS: FilterState = {
   q: "",
   dateFrom: "",
   dateTo: "",
+  year: "",
+  month: "",
   distances: [],
   continent: "",
   country: "",
@@ -38,6 +74,32 @@ const EMPTY_FILTERS: FilterState = {
   majorMarathon: "",
   majorQualifier: "",
 };
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR + 1, CURRENT_YEAR + 2].map(
+  String,
+);
+
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1),
+  label: new Date(2000, i, 1).toLocaleString(undefined, { month: "long" }),
+}));
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+// Date range covered by a year/month pick; month "" means the whole year.
+function rangeFor(year: string, month: string): { dateFrom: string; dateTo: string } {
+  const y = Number(year);
+  if (!month) return { dateFrom: `${y}-01-01`, dateTo: `${y}-12-31` };
+  const m = Number(month);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    dateFrom: `${y}-${pad2(m)}-01`,
+    dateTo: `${y}-${pad2(m)}-${lastDay}`,
+  };
+}
 
 const CONTINENT_OPTIONS = (
   Object.entries(continents) as [ContinentCode, string][]
@@ -74,15 +136,21 @@ const STATUS_STYLES: Record<EntryStatus, string> = {
   sold_out: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300",
 };
 
-const inputClass =
-  "rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
-
-function chipClass(active: boolean): string {
-  return `rounded-full border px-2.5 py-1 text-xs ${
-    active
-      ? "border-emerald-600 bg-emerald-600 text-white"
-      : "border-zinc-300 hover:border-emerald-500 dark:border-zinc-700"
-  }`;
+function FilterGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="rounded-lg border p-3">
+      <legend className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {label}
+      </legend>
+      {children}
+    </fieldset>
+  );
 }
 
 export default function HomePage() {
@@ -156,20 +224,6 @@ export default function HomePage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   };
 
-  const toggleDistance = (d: StandardDistance) =>
-    updateFilters({
-      distances: filters.distances.includes(d)
-        ? filters.distances.filter((x) => x !== d)
-        : [...filters.distances, d],
-    });
-
-  const toggleEntryStatus = (s: EntryStatus) =>
-    updateFilters({
-      entryStatuses: filters.entryStatuses.includes(s)
-        ? filters.entryStatuses.filter((x) => x !== s)
-        : [...filters.entryStatuses, s],
-    });
-
   const countryOptions = useMemo(
     () =>
       filters.continent
@@ -184,247 +238,357 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Filter bar */}
-      <section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="flex flex-col gap-4">
           {/* Search row */}
           <div className="flex items-center gap-3">
-            <input
+            <Input
               type="search"
               placeholder="Search races by name…"
               value={filters.q}
               onChange={(e) => updateFilters({ q: e.target.value })}
-              className={`${inputClass} flex-1`}
+              className="flex-1"
               aria-label="Search races by name"
             />
             {hasActiveFilters && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setOffset(0);
                   setFilters(EMPTY_FILTERS);
                 }}
-                className="whitespace-nowrap text-xs text-emerald-600 hover:underline dark:text-emerald-400"
               >
                 Clear all
-              </button>
+              </Button>
             )}
           </div>
 
           {/* Filter groups */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Distance
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <FilterGroup label="Distance">
+              <ToggleGroup
+                type="multiple"
+                variant="outline"
+                size="sm"
+                spacing={1}
+                className="flex-wrap"
+                value={filters.distances}
+                onValueChange={(v) =>
+                  updateFilters({ distances: v as StandardDistance[] })
+                }
+              >
                 {STANDARD_DISTANCES.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => toggleDistance(d)}
-                    className={chipClass(filters.distances.includes(d))}
-                  >
+                  <ToggleGroupItem key={d} value={d}>
                     {d}
-                  </button>
+                  </ToggleGroupItem>
                 ))}
-              </div>
-            </fieldset>
+              </ToggleGroup>
+            </FilterGroup>
 
-            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Location
-              </legend>
+            <FilterGroup label="Location">
               <div className="flex flex-col gap-2">
-                <select
-                  value={filters.continent}
-                  onChange={(e) =>
+                <Select
+                  value={filters.continent || ANY}
+                  onValueChange={(v) =>
                     updateFilters({
-                      continent: e.target.value as FilterState["continent"],
+                      continent:
+                        v === ANY ? "" : (v as FilterState["continent"]),
                       country: "",
                     })
                   }
-                  className={inputClass}
-                  aria-label="Continent"
                 >
-                  <option value="">All continents</option>
-                  {CONTINENT_OPTIONS.map(([code, name]) => (
-                    <option key={code} value={code}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.country}
-                  onChange={(e) => updateFilters({ country: e.target.value })}
-                  className={inputClass}
-                  aria-label="Country"
+                  <SelectTrigger className="w-full" aria-label="Continent">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>All continents</SelectItem>
+                    {CONTINENT_OPTIONS.map(([code, name]) => (
+                      <SelectItem key={code} value={code}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.country || ANY}
+                  onValueChange={(v) =>
+                    updateFilters({ country: v === ANY ? "" : v })
+                  }
                 >
-                  <option value="">All countries</option>
-                  {countryOptions.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full" aria-label="Country">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>All countries</SelectItem>
+                    {countryOptions.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </fieldset>
+            </FilterGroup>
 
-            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Entry
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
-                {ENTRY_STATUSES.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => toggleEntryStatus(s)}
-                    className={chipClass(filters.entryStatuses.includes(s))}
+            <FilterGroup label="Entry">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                    aria-label="Entry types"
                   >
-                    {ENTRY_STATUS_LABELS[s]}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+                    {filters.entryStatuses.length === 0
+                      ? "All entry types"
+                      : filters.entryStatuses.length === 1
+                        ? ENTRY_STATUS_LABELS[filters.entryStatuses[0]]
+                        : `${filters.entryStatuses.length} entry types`}
+                    <ChevronDownIcon className="text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start">
+                  {ENTRY_STATUSES.map((s) => (
+                    <DropdownMenuCheckboxItem
+                      key={s}
+                      checked={filters.entryStatuses.includes(s)}
+                      onCheckedChange={(checked) =>
+                        updateFilters({
+                          entryStatuses: checked
+                            ? [...filters.entryStatuses, s]
+                            : filters.entryStatuses.filter((x) => x !== s),
+                        })
+                      }
+                      // Keep the menu open while picking multiple statuses.
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {ENTRY_STATUS_LABELS[s]}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </FilterGroup>
 
-            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Additional
-              </legend>
+            <FilterGroup label="Dates">
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={filters.year || ANY}
+                    onValueChange={(v) => {
+                      if (v === ANY) {
+                        updateFilters({
+                          year: "",
+                          month: "",
+                          dateFrom: "",
+                          dateTo: "",
+                        });
+                      } else {
+                        updateFilters({
+                          year: v,
+                          ...rangeFor(v, filters.month),
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full" aria-label="Year">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY}>Any year</SelectItem>
+                      {YEAR_OPTIONS.map((y) => (
+                        <SelectItem key={y} value={y}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={filters.month || ANY}
+                    disabled={!filters.year}
+                    onValueChange={(v) => {
+                      const month = v === ANY ? "" : v;
+                      updateFilters({
+                        month,
+                        ...rangeFor(filters.year, month),
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="w-full" aria-label="Month">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY}>Any month</SelectItem>
+                      {MONTH_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-zinc-500">From</span>
-                    <input
+                    <span className="text-xs text-muted-foreground">From</span>
+                    <Input
                       type="date"
                       value={filters.dateFrom}
-                      onChange={(e) => updateFilters({ dateFrom: e.target.value })}
-                      className={inputClass}
+                      onChange={(e) =>
+                        updateFilters({
+                          dateFrom: e.target.value,
+                          year: "",
+                          month: "",
+                        })
+                      }
                       aria-label="From date"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-zinc-500">To</span>
-                    <input
+                    <span className="text-xs text-muted-foreground">To</span>
+                    <Input
                       type="date"
                       value={filters.dateTo}
-                      onChange={(e) => updateFilters({ dateTo: e.target.value })}
-                      className={inputClass}
+                      onChange={(e) =>
+                        updateFilters({
+                          dateTo: e.target.value,
+                          year: "",
+                          month: "",
+                        })
+                      }
                       aria-label="To date"
                     />
                   </label>
                 </div>
+              </div>
+            </FilterGroup>
+
+            <FilterGroup label="Additional">
+              <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={filters.majorMarathon}
-                    onChange={(e) =>
+                  <Select
+                    value={filters.majorMarathon || ANY}
+                    onValueChange={(v) =>
                       updateFilters({
-                        majorMarathon: e.target.value as FilterState["majorMarathon"],
+                        majorMarathon:
+                          v === ANY ? "" : (v as FilterState["majorMarathon"]),
                       })
                     }
-                    className={inputClass}
-                    aria-label="Major marathon"
                   >
-                    <option value="">Majors: any</option>
-                    <option value="true">Majors only</option>
-                    <option value="false">Exclude majors</option>
-                  </select>
-                  <select
-                    value={filters.majorQualifier}
-                    onChange={(e) =>
+                    <SelectTrigger className="w-full" aria-label="Major marathon">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY}>Majors: any</SelectItem>
+                      <SelectItem value="true">Majors only</SelectItem>
+                      <SelectItem value="false">Exclude majors</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={filters.majorQualifier || ANY}
+                    onValueChange={(v) =>
                       updateFilters({
-                        majorQualifier: e.target.value as FilterState["majorQualifier"],
+                        majorQualifier:
+                          v === ANY ? "" : (v as FilterState["majorQualifier"]),
                       })
                     }
-                    className={inputClass}
-                    aria-label="Major qualifier"
                   >
-                    <option value="">Qualifiers: any</option>
-                    <option value="true">Qualifiers only</option>
-                    <option value="false">Exclude qualifiers</option>
-                  </select>
+                    <SelectTrigger className="w-full" aria-label="Major qualifier">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY}>Qualifiers: any</SelectItem>
+                      <SelectItem value="true">Qualifiers only</SelectItem>
+                      <SelectItem value="false">Exclude qualifiers</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </fieldset>
+            </FilterGroup>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Results */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
           <h1 className="text-lg font-semibold">Upcoming races</h1>
           {!loading && !error && (
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted-foreground">
               {total} race{total === 1 ? "" : "s"} found
             </span>
           )}
         </div>
 
         {error && (
-          <div className="rounded-md border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
             {error}
           </div>
         )}
 
         {!error && (
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-50 text-xs uppercase text-zinc-500 dark:bg-zinc-900">
-                <tr>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Race</th>
-                  <th className="px-4 py-3">Distances</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Entry</th>
-                  <th className="px-4 py-3">Major</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Race</TableHead>
+                  <TableHead>Distances</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Entry</TableHead>
+                  <TableHead>Major</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="py-8 text-center text-muted-foreground"
+                    >
                       Loading races…
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : races.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="py-8 text-center text-muted-foreground"
+                    >
                       No races match your filters.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   races.map((race) => (
-                    <tr
-                      key={race.id}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3">
+                    <TableRow key={race.id}>
+                      <TableCell className="whitespace-nowrap">
                         {formatDate(race.date)}
-                      </td>
-                      <td className="px-4 py-3 font-medium">
+                      </TableCell>
+                      <TableCell className="font-medium">
                         {race.website ? (
                           <a
                             href={race.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:text-emerald-600 hover:underline dark:hover:text-emerald-400"
+                            className="hover:text-primary hover:underline"
                           >
                             {race.name}
                           </a>
                         ) : (
                           race.name
                         )}
-                      </td>
-                      <td className="px-4 py-3">{formatDistances(race.distances)}</td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell>{formatDistances(race.distances)}</TableCell>
+                      <TableCell>
                         {race.city}, {race.country}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[race.entryStatus]}`}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={STATUS_STYLES[race.entryStatus]}
                         >
                           {ENTRY_STATUS_LABELS[race.entryStatus]}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs">
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
                         {race.isMajorMarathon && (
                           <span title="World Marathon Major">🌟 Major</span>
                         )}
@@ -432,34 +596,36 @@ export default function HomePage() {
                         {race.isMajorQualifier && (
                           <span title="Major qualifier course">✅ Qualifier</span>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
         {!loading && !error && total > PAGE_SIZE && (
           <div className="mt-4 flex items-center justify-between text-sm">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-40 dark:border-zinc-700"
             >
               Previous
-            </button>
-            <span className="text-zinc-500">
+            </Button>
+            <span className="text-muted-foreground">
               {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               disabled={offset + PAGE_SIZE >= total}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-40 dark:border-zinc-700"
             >
               Next
-            </button>
+            </Button>
           </div>
         )}
       </section>
