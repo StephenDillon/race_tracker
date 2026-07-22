@@ -186,136 +186,163 @@ export default function HomePage() {
       {/* Filter bar */}
       <section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
         <div className="flex flex-col gap-4">
-          {/* Row 1: search + dates + location */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {/* Search row */}
+          <div className="flex items-center gap-3">
             <input
               type="search"
               placeholder="Search races by name…"
               value={filters.q}
               onChange={(e) => updateFilters({ q: e.target.value })}
-              className={`${inputClass} lg:col-span-1`}
+              className={`${inputClass} flex-1`}
               aria-label="Search races by name"
             />
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => updateFilters({ dateFrom: e.target.value })}
-              className={inputClass}
-              aria-label="From date"
-            />
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => updateFilters({ dateTo: e.target.value })}
-              className={inputClass}
-              aria-label="To date"
-            />
-            <select
-              value={filters.continent}
-              onChange={(e) =>
-                updateFilters({
-                  continent: e.target.value as FilterState["continent"],
-                  country: "",
-                })
-              }
-              className={inputClass}
-              aria-label="Continent"
-            >
-              <option value="">All continents</option>
-              {CONTINENT_OPTIONS.map(([code, name]) => (
-                <option key={code} value={code}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.country}
-              onChange={(e) => updateFilters({ country: e.target.value })}
-              className={inputClass}
-              aria-label="Country"
-            >
-              <option value="">All countries</option>
-              {countryOptions.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setOffset(0);
+                  setFilters(EMPTY_FILTERS);
+                }}
+                className="whitespace-nowrap text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
-          {/* Row 2: distance + entry chips + majors */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-xs font-medium text-zinc-500">
+          {/* Filter groups */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Distance
-              </span>
-              {STANDARD_DISTANCES.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => toggleDistance(d)}
-                  className={chipClass(filters.distances.includes(d))}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                {STANDARD_DISTANCES.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => toggleDistance(d)}
+                    className={chipClass(filters.distances.includes(d))}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
 
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-xs font-medium text-zinc-500">
+            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Location
+              </legend>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={filters.continent}
+                  onChange={(e) =>
+                    updateFilters({
+                      continent: e.target.value as FilterState["continent"],
+                      country: "",
+                    })
+                  }
+                  className={inputClass}
+                  aria-label="Continent"
+                >
+                  <option value="">All continents</option>
+                  {CONTINENT_OPTIONS.map(([code, name]) => (
+                    <option key={code} value={code}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filters.country}
+                  onChange={(e) => updateFilters({ country: e.target.value })}
+                  className={inputClass}
+                  aria-label="Country"
+                >
+                  <option value="">All countries</option>
+                  {countryOptions.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </fieldset>
+
+            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Entry
-              </span>
-              {ENTRY_STATUSES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => toggleEntryStatus(s)}
-                  className={chipClass(filters.entryStatuses.includes(s))}
-                >
-                  {ENTRY_STATUS_LABELS[s]}
-                </button>
-              ))}
-            </div>
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                {ENTRY_STATUSES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => toggleEntryStatus(s)}
+                    className={chipClass(filters.entryStatuses.includes(s))}
+                  >
+                    {ENTRY_STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={filters.majorMarathon}
-                onChange={(e) =>
-                  updateFilters({
-                    majorMarathon: e.target.value as FilterState["majorMarathon"],
-                  })
-                }
-                className={inputClass}
-                aria-label="Major marathon"
-              >
-                <option value="">Majors: any</option>
-                <option value="true">Majors only</option>
-                <option value="false">Exclude majors</option>
-              </select>
-              <select
-                value={filters.majorQualifier}
-                onChange={(e) =>
-                  updateFilters({
-                    majorQualifier: e.target.value as FilterState["majorQualifier"],
-                  })
-                }
-                className={inputClass}
-                aria-label="Major qualifier"
-              >
-                <option value="">Qualifiers: any</option>
-                <option value="true">Qualifiers only</option>
-                <option value="false">Exclude qualifiers</option>
-              </select>
-              {hasActiveFilters && (
-                <button
-                  onClick={() => {
-                    setOffset(0);
-                    setFilters(EMPTY_FILTERS);
-                  }}
-                  className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
+            <fieldset className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Additional
+              </legend>
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-zinc-500">From</span>
+                    <input
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => updateFilters({ dateFrom: e.target.value })}
+                      className={inputClass}
+                      aria-label="From date"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-zinc-500">To</span>
+                    <input
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => updateFilters({ dateTo: e.target.value })}
+                      className={inputClass}
+                      aria-label="To date"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={filters.majorMarathon}
+                    onChange={(e) =>
+                      updateFilters({
+                        majorMarathon: e.target.value as FilterState["majorMarathon"],
+                      })
+                    }
+                    className={inputClass}
+                    aria-label="Major marathon"
+                  >
+                    <option value="">Majors: any</option>
+                    <option value="true">Majors only</option>
+                    <option value="false">Exclude majors</option>
+                  </select>
+                  <select
+                    value={filters.majorQualifier}
+                    onChange={(e) =>
+                      updateFilters({
+                        majorQualifier: e.target.value as FilterState["majorQualifier"],
+                      })
+                    }
+                    className={inputClass}
+                    aria-label="Major qualifier"
+                  >
+                    <option value="">Qualifiers: any</option>
+                    <option value="true">Qualifiers only</option>
+                    <option value="false">Exclude qualifiers</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
           </div>
         </div>
       </section>
