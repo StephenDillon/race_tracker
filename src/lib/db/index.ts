@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { RaceStore } from "./store";
-import { MemoryRaceStore } from "./memory";
 import { SupabaseRaceStore } from "./supabase";
 
 /**
@@ -9,12 +8,8 @@ import { SupabaseRaceStore } from "./supabase";
  * import makes any accidental client-side import a build error, keeping
  * database access (and Supabase keys) off the client.
  *
- * Uses Supabase when SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are set
- * (production on Vercel), otherwise falls back to the in-memory store
- * (local dev without credentials).
- *
- * The store is cached on globalThis so the client is reused across requests
- * and submitted races survive dev-server hot reloads when using memory.
+ * Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to be set.
+ * The store is cached on globalThis so the client is reused across requests.
  */
 const globalStore = globalThis as unknown as { __raceStore?: RaceStore };
 
@@ -22,10 +17,12 @@ export function getRaceStore(): RaceStore {
   if (!globalStore.__raceStore) {
     const url = process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    globalStore.__raceStore =
-      url && serviceRoleKey
-        ? new SupabaseRaceStore(url, serviceRoleKey)
-        : new MemoryRaceStore();
+    if (!url || !serviceRoleKey) {
+      throw new Error(
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
+      );
+    }
+    globalStore.__raceStore = new SupabaseRaceStore(url, serviceRoleKey);
   }
   return globalStore.__raceStore;
 }

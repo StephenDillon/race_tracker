@@ -9,7 +9,6 @@ import {
   type ContinentCode,
   type EntryStatus,
   type Race,
-  type RaceDistance,
   type StandardDistance,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -51,8 +50,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-import { CheckIcon, ChevronDownIcon, FilterIcon, XIcon } from "lucide-react";
+import { formatDate, formatDistances } from "@/lib/format";
+import { CheckIcon, ChevronDownIcon, FilterIcon, HeartIcon, XIcon } from "lucide-react";
 import type { CityResult } from "@/lib/types";
 
 const PAGE_SIZE = 25;
@@ -136,20 +135,6 @@ const ALL_COUNTRIES = (Object.keys(countries) as TCountryCode[])
     continent: countries[code].continent,
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
-
-function formatDistances(distances: RaceDistance[]): string {
-  return distances
-    .map((d) => (d.kind === "standard" ? d.distance : d.label))
-    .join(", ");
-}
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
-}
 
 const STATUS_STYLES: Record<EntryStatus, string> = {
   open: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300",
@@ -395,6 +380,36 @@ export default function HomePage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [savedRaceIds, setSavedRaceIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/user-races")
+      .then((r) => (r.ok ? r.json() : { raceIds: [] }))
+      .then((d: { raceIds: string[] }) => setSavedRaceIds(new Set(d.raceIds)))
+      .catch(() => {});
+  }, []);
+
+  const toggleSaveRace = async (raceId: string) => {
+    const isSaved = savedRaceIds.has(raceId);
+    if (isSaved) {
+      setSavedRaceIds((prev) => {
+        const next = new Set(prev);
+        next.delete(raceId);
+        return next;
+      });
+      await fetch(`/api/user-races?raceId=${encodeURIComponent(raceId)}`, {
+        method: "DELETE",
+      });
+    } else {
+      setSavedRaceIds((prev) => new Set(prev).add(raceId));
+      await fetch("/api/user-races", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raceId }),
+      });
+    }
+  };
 
   // Debounce the text search so we don't hit the API on every keystroke.
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -657,6 +672,7 @@ export default function HomePage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Race</TableHead>
                   <TableHead>Distances</TableHead>
@@ -733,7 +749,7 @@ export default function HomePage() {
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Loading races…
@@ -742,7 +758,7 @@ export default function HomePage() {
                 ) : races.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No races match your filters.
@@ -751,6 +767,18 @@ export default function HomePage() {
                 ) : (
                   races.map((race) => (
                     <TableRow key={race.id}>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => toggleSaveRace(race.id)}
+                          className="text-muted-foreground hover:text-primary"
+                          aria-label={savedRaceIds.has(race.id) ? "Remove from my races" : "Add to my races"}
+                        >
+                          <HeartIcon
+                            className={`size-4 ${savedRaceIds.has(race.id) ? "fill-primary text-primary" : ""}`}
+                          />
+                        </button>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-sm">
                         {formatDate(race.date)}
                       </TableCell>

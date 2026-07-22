@@ -20,4 +20,12 @@ export interface RaceStore {
   createRace(submission: RaceSubmission): Promise<Race>;
   /** Distinct cities (with their country) whose name matches `q`. */
   searchCities(q: string, limit: number): Promise<CityResult[]>;
+  /** Get all race IDs saved by a user. */
+  getUserRaceIds(userId: string): Promise<string[]>;
+  /** Get full Race objects for a user's saved races. */
+  getUserRaces(userId: string): Promise<Race[]>;
+  /** Save a race to the user's list. */
+  addUserRace(userId: string, raceId: string): Promise<void>;
+  /** Remove a race from the user's list. */
+  removeUserRace(userId: string, raceId: string): Promise<void>;
 }

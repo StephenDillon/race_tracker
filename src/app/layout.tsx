@@ -4,8 +4,10 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "next-themes";
-import { Button } from "@/components/ui/button";
+
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
+import { NavTabs } from "@/components/nav-tabs";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -29,16 +31,14 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <header className="border-b">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-              <Link href="/" className="text-xl font-bold tracking-tight">
-                🏃 Race Finder
-              </Link>
+              <div className="flex items-center gap-6">
+                <Link href="/" className="text-xl font-bold tracking-tight">
+                  🏃 Race Finder
+                </Link>
+                <NavTabs />
+              </div>
               <nav className="flex items-center gap-2">
-                <Button variant="ghost" asChild>
-                  <Link href="/">Find races</Link>
-                </Button>
-                <Button asChild>
-                  <Link href="/submit">Submit a race</Link>
-                </Button>
+                <UserMenu />
                 <ThemeToggle />
               </nav>
             </div>

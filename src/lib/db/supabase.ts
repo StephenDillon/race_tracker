@@ -210,4 +210,46 @@ export class SupabaseRaceStore implements RaceStore {
     if (error) throw new Error(`Failed to create race: ${error.message}`);
     return rowToRace(data as RtRaceRow);
   }
+
+  async getUserRaceIds(userId: string): Promise<string[]> {
+    const { data, error } = await this.client
+      .from("rt_user_races")
+      .select("race_id")
+      .eq("user_id", userId);
+
+    if (error) throw new Error(`Failed to get user races: ${error.message}`);
+    return (data as { race_id: string }[]).map((r) => r.race_id);
+  }
+
+  async getUserRaces(userId: string): Promise<Race[]> {
+    const ids = await this.getUserRaceIds(userId);
+    if (ids.length === 0) return [];
+
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select("*")
+      .in("id", ids)
+      .order("date", { ascending: true });
+
+    if (error) throw new Error(`Failed to get user races: ${error.message}`);
+    return (data as RtRaceRow[]).map(rowToRace);
+  }
+
+  async addUserRace(userId: string, raceId: string): Promise<void> {
+    const { error } = await this.client
+      .from("rt_user_races")
+      .upsert({ user_id: userId, race_id: raceId });
+
+    if (error) throw new Error(`Failed to add user race: ${error.message}`);
+  }
+
+  async removeUserRace(userId: string, raceId: string): Promise<void> {
+    const { error } = await this.client
+      .from("rt_user_races")
+      .delete()
+      .eq("user_id", userId)
+      .eq("race_id", raceId);
+
+    if (error) throw new Error(`Failed to remove user race: ${error.message}`);
+  }
 }
