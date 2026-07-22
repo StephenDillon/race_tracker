@@ -52,10 +52,15 @@ import {
 } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, FilterIcon, XIcon } from "lucide-react";
 import type { CityResult } from "@/lib/types";
 
 const PAGE_SIZE = 25;
+
+const TAG_OPTIONS = [
+  { value: "World Major", label: "World Major" },
+  { value: "World Major Qualifier", label: "World Major Qualifier" },
+];
 
 // Radix Select items cannot have an empty-string value, so "any" stands in
 // for the unset state everywhere a select is optional.
@@ -79,8 +84,7 @@ interface FilterState {
   distances: StandardDistance[];
   locations: LocationPick[];
   entryStatuses: EntryStatus[];
-
-
+  tags: string[];
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -92,8 +96,7 @@ const EMPTY_FILTERS: FilterState = {
   distances: [],
   locations: [],
   entryStatuses: [],
-
-
+  tags: [],
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -422,8 +425,7 @@ export default function HomePage() {
       if (cities.length) params.set("cities", cities.join(","));
       if (f.entryStatuses.length)
         params.set("entryStatuses", f.entryStatuses.join(","));
-
-
+      if (f.tags.length) params.set("tags", f.tags.join(","));
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(pageOffset));
 
@@ -453,6 +455,7 @@ export default function HomePage() {
     filters.distances,
     filters.locations,
     filters.entryStatuses,
+    filters.tags,
     offset,
   ]);
 
@@ -658,8 +661,72 @@ export default function HomePage() {
                   <TableHead>Race</TableHead>
                   <TableHead>Distances</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Entry</TableHead>
-                  <TableHead>Tags</TableHead>
+                  <TableHead>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          Entry
+                          <FilterIcon
+                            className={`size-3 ${filters.entryStatuses.length > 0 ? "text-primary" : "text-muted-foreground"}`}
+                          />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {ENTRY_STATUSES.map((s) => (
+                          <DropdownMenuCheckboxItem
+                            key={s}
+                            checked={filters.entryStatuses.includes(s)}
+                            onCheckedChange={(checked) =>
+                              updateFilters({
+                                entryStatuses: checked
+                                  ? [...filters.entryStatuses, s]
+                                  : filters.entryStatuses.filter((x) => x !== s),
+                              })
+                            }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            {ENTRY_STATUS_LABELS[s]}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableHead>
+                  <TableHead>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          Tags
+                          <FilterIcon
+                            className={`size-3 ${filters.tags.length > 0 ? "text-primary" : "text-muted-foreground"}`}
+                          />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {TAG_OPTIONS.map((o) => (
+                          <DropdownMenuCheckboxItem
+                            key={o.value}
+                            checked={filters.tags.includes(o.value)}
+                            onCheckedChange={(checked) =>
+                              updateFilters({
+                                tags: checked
+                                  ? [...filters.tags, o.value]
+                                  : filters.tags.filter((t) => t !== o.value),
+                              })
+                            }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            {o.label}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
