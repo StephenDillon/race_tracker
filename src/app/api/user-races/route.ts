@@ -25,11 +25,20 @@ export async function POST(req: NextRequest) {
   const auth = await getRequestUser(req);
   if (!auth.ok) return authFailureResponse(auth);
 
-  const body = await req.json();
-  const raceId = typeof body.raceId === "string" ? body.raceId : null;
-  if (!raceId) return NextResponse.json({ error: "raceId required" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const raceId = (body as Record<string, unknown> | null)?.raceId;
+  if (typeof raceId !== "string" || !raceId) {
+    return NextResponse.json({ error: "raceId required" }, { status: 400 });
+  }
 
   const store = getRaceStore();
+  // Scoped to the authenticated user — the body never carries a user id.
   await store.addUserRace(auth.user.id, raceId);
   return NextResponse.json({ ok: true }, { status: 201 });
 }

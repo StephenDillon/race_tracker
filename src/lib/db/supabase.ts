@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { countries, getCountryData, type TCountryCode } from "countries-list";
 import type {
   CityResult,
+  ClubRun,
   EntryMethod,
   EntryStatus,
   Race,
@@ -12,6 +13,10 @@ import type {
   RaceFilters,
   RaceListResult,
   RaceSubmission,
+  RunClub,
+  RunClubFilters,
+  RunClubListResult,
+  RunClubSubmission,
 } from "@/lib/types";
 import type { RaceStore } from "./store";
 
@@ -24,6 +29,7 @@ import type { RaceStore } from "./store";
  */
 
 const TABLE = "rt_races";
+const CLUBS_TABLE = "rt_run_clubs";
 
 const RACE_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const RACE_KEY_LENGTH = 8;
@@ -97,6 +103,62 @@ function submissionColumns(submission: RaceSubmission) {
     entry_methods: submission.entryMethods ?? [],
     website: submission.website ?? null,
     description: submission.description ?? null,
+  };
+}
+
+interface RtRunClubRow {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string;
+  region: string | null;
+  country: string;
+  country_code: string;
+  website: string | null;
+  runs: ClubRun[];
+  place_id: string | null;
+  formatted_address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  owner_id: string;
+  created_at: string;
+}
+
+function rowToRunClub(row: RtRunClubRow): RunClub {
+  return {
+    id: row.id,
+    name: row.name,
+    city: row.city,
+    region: row.region ?? undefined,
+    country: row.country,
+    countryCode: row.country_code,
+    address: row.address ?? undefined,
+    website: row.website ?? undefined,
+    runs: row.runs ?? [],
+    placeId: row.place_id ?? undefined,
+    formattedAddress: row.formatted_address ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    ownerId: row.owner_id,
+    createdAt: row.created_at,
+  };
+}
+
+/** Columns shared by club create and update, derived from a submission. */
+function clubSubmissionColumns(submission: RunClubSubmission) {
+  return {
+    name: submission.name,
+    address: submission.address ?? null,
+    city: submission.city,
+    region: submission.region ?? null,
+    country: getCountryData(submission.countryCode as TCountryCode).name,
+    country_code: submission.countryCode,
+    website: submission.website ?? null,
+    runs: submission.runs ?? [],
+    place_id: submission.placeId ?? null,
+    formatted_address: submission.formattedAddress ?? null,
+    latitude: submission.latitude ?? null,
+    longitude: submission.longitude ?? null,
   };
 }
 
@@ -341,5 +403,101 @@ export class SupabaseRaceStore implements RaceStore {
       .eq("race_id", raceId);
 
     if (error) throw new Error(`Failed to remove user race: ${error.message}`);
+  }
+
+  async listRunClubs(filters: RunClubFilters): Promise<RunClubListResult> {
+    const offset = filters.offset ?? 0;
+    const limit = filters.limit ?? 25;
+
+    let query = this.client
+      .from(CLUBS_TABLE)
+      .select("*", { count: "exact" });
+
+    if (filters.q?.trim()) {
+      const term = sanitizeSearchTerm(filters.q);
+      if (term) query = query.ilike("name", `%${term}%`);
+    }
+
+    if (filters.location?.trim()) {
+      const term = sanitizeSearchTerm(filters.location);
+      if (term) {
+        query = query.or(`city.ilike.%${term}%,country.ilike.%${term}%`);
+      }
+    }
+
+    const { data, error, count } = await query
+      .order("name", { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw new Error(`Failed to list run clubs: ${error.message}`);
+
+    return {
+      clubs: (data as RtRunClubRow[]).map(rowToRunClub),
+      total: count ?? 0,
+    };
+  }
+
+  async getRunClub(id: string): Promise<RunClub | null> {
+    const { data, error } = await this.client
+      .from(CLUBS_TABLE)
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to get run club: ${error.message}`);
+    return data ? rowToRunClub(data as RtRunClubRow) : null;
+  }
+
+  async createRunClub(
+    submission: RunClubSubmission,
+    ownerId: string,
+  ): Promise<RunClub> {
+    for (let attempt = 0; ; attempt++) {
+      const { data, error } = await this.client
+        .from(CLUBS_TABLE)
+        .insert({
+          id: generateRaceKey(),
+          ...clubSubmissionColumns(submission),
+          owner_id: ownerId,
+        })
+        .select()
+        .single();
+
+      if (!error) return rowToRunClub(data as RtRunClubRow);
+      if (
+        error.code === "23505" &&
+        error.message.includes("rt_run_clubs_pkey") &&
+        attempt < 3
+      ) {
+        continue;
+      }
+      throw new Error(`Failed to create run club: ${error.message}`);
+    }
+  }
+
+  async updateRunClub(
+    id: string,
+    submission: RunClubSubmission,
+  ): Promise<RunClub | null> {
+    const { data, error } = await this.client
+      .from(CLUBS_TABLE)
+      .update(clubSubmissionColumns(submission))
+      .eq("id", id)
+      .select();
+
+    if (error) throw new Error(`Failed to update run club: ${error.message}`);
+    const rows = data as RtRunClubRow[];
+    return rows.length > 0 ? rowToRunClub(rows[0]) : null;
+  }
+
+  async deleteRunClub(id: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from(CLUBS_TABLE)
+      .delete()
+      .eq("id", id)
+      .select("id");
+
+    if (error) throw new Error(`Failed to delete run club: ${error.message}`);
+    return (data?.length ?? 0) > 0;
   }
 }

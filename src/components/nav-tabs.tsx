@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Races" },
   { href: "/my-races", label: "My Races" },
   { href: "/world-majors", label: "World Majors" },
+  { href: "/run-clubs", label: "Run Clubs" },
 ];
 
 export function NavTabs() {

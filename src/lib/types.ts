@@ -147,6 +147,95 @@ export interface ApiKeyMeta {
   revoked: boolean;
 }
 
+/** Weekday names indexed 0 (Sunday) – 6 (Saturday), matching ClubRun.day. */
+export const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+/** Which week of the month a monthly run falls on. */
+export const MONTHLY_WEEKS = ["1", "2", "3", "4", "last"] as const;
+
+export type MonthlyWeek = (typeof MONTHLY_WEEKS)[number];
+
+/**
+ * One entry in a run club's schedule: a weekly run, a monthly run
+ * (nth weekday of the month), or a one-off event on a fixed date.
+ * Times are 24h "HH:MM"; `day` is 0 (Sunday) – 6 (Saturday).
+ */
+export type ClubRun =
+  | { kind: "weekly"; title: string; day: number; time: string; location?: string }
+  | {
+      kind: "monthly";
+      title: string;
+      week: MonthlyWeek;
+      day: number;
+      time: string;
+      location?: string;
+    }
+  | { kind: "event"; title: string; date: string; time?: string; location?: string };
+
+export interface RunClub {
+  id: string;
+  name: string;
+  city: string;
+  /** Display name derived from countryCode (e.g. "United States"). */
+  country: string;
+  /** ISO 3166-1 alpha-2 code (e.g. "US"). */
+  countryCode: string;
+  /** Street-level meetup address; city + country are the required minimum. */
+  address?: string;
+  /** State / province / county, from the matched place. */
+  region?: string;
+  website?: string;
+  /** Scheduled runs and events. */
+  runs: ClubRun[];
+  /**
+   * Google place id when the address was picked from address search. Its
+   * presence is what makes the fields below trustworthy — the server
+   * re-resolves it rather than believing the client.
+   */
+  placeId?: string;
+  /** Google's canonical one-line address for the matched place. */
+  formattedAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  /** id of the user who created (owns) the club. */
+  ownerId: string;
+  createdAt: string;
+}
+
+/**
+ * Payload accepted when someone creates or edits a run club. When `placeId`
+ * is set the server re-resolves it against Google and derives `countryCode`,
+ * `formattedAddress`, and the coordinates from the result, so those fields
+ * are not read from the client.
+ */
+export type RunClubSubmission = Omit<
+  RunClub,
+  "id" | "createdAt" | "country" | "ownerId"
+>;
+
+/** Filters accepted by the run club listing API. Combined with AND. */
+export interface RunClubFilters {
+  /** Free-text search on club name. */
+  q?: string;
+  /** Free-text location search, matched against city and country. */
+  location?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RunClubListResult {
+  clubs: RunClub[];
+  total: number;
+}
+
 /** A distinct city that hosts at least one race, for location search. */
 export interface CityResult {
   city: string;

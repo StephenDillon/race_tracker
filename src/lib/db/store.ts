@@ -6,6 +6,10 @@ import type {
   RaceFilters,
   RaceListResult,
   RaceSubmission,
+  RunClub,
+  RunClubFilters,
+  RunClubListResult,
+  RunClubSubmission,
 } from "@/lib/types";
 
 /**
@@ -43,4 +47,13 @@ export interface RaceStore {
   addUserRace(userId: string, raceId: string): Promise<void>;
   /** Remove a race from the user's list. */
   removeUserRace(userId: string, raceId: string): Promise<void>;
+  /** List run clubs matching the filters, sorted by name. */
+  listRunClubs(filters: RunClubFilters): Promise<RunClubListResult>;
+  getRunClub(id: string): Promise<RunClub | null>;
+  /** Create a run club owned by `ownerId` (the creating user). */
+  createRunClub(submission: RunClubSubmission, ownerId: string): Promise<RunClub>;
+  /** Replace a club's editable fields. Returns null when the club doesn't exist. */
+  updateRunClub(id: string, submission: RunClubSubmission): Promise<RunClub | null>;
+  /** Delete a run club. Returns false when the club doesn't exist. */
+  deleteRunClub(id: string): Promise<boolean>;
 }
