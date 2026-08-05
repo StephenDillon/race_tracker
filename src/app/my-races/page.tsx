@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { Race } from "@/lib/types";
 import { formatCountdown, formatDate, formatDistances } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,18 +59,12 @@ export default function MyRacesPage() {
               </button>
               <CardContent className="flex flex-col gap-2 pt-4">
                 <h3 className="font-semibold pr-8">
-                  {race.website ? (
-                    <a
-                      href={race.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-primary hover:underline"
-                    >
-                      {race.name}
-                    </a>
-                  ) : (
-                    race.name
-                  )}
+                  <Link
+                    href={`/races/${encodeURIComponent(race.id)}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {race.name}
+                  </Link>
                 </h3>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span>{formatDistances(race.distances)}</span>

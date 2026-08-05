@@ -1,9 +1,11 @@
 import "server-only";
 
+import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { countries, getCountryData, type TCountryCode } from "countries-list";
 import type {
   CityResult,
+  EntryMethod,
   EntryStatus,
   Race,
   RaceDistance,
@@ -23,6 +25,21 @@ import type { RaceStore } from "./store";
 
 const TABLE = "rt_races";
 
+const RACE_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const RACE_KEY_LENGTH = 8;
+
+/**
+ * Short URL-friendly race key, generated server-side on create (the id
+ * column has no DB default — see migration 0007). 36^8 keys make random
+ * collisions vanishingly rare; createRace still retries on one.
+ */
+function generateRaceKey(): string {
+  return Array.from(
+    randomBytes(RACE_KEY_LENGTH),
+    (b) => RACE_KEY_ALPHABET[b % RACE_KEY_ALPHABET.length],
+  ).join("");
+}
+
 interface RtRaceRow {
   id: string;
   name: string;
@@ -35,8 +52,10 @@ interface RtRaceRow {
   country_code: string;
   entry_status: EntryStatus;
   tags: string[];
+  entry_methods: EntryMethod[] | null;
   website: string | null;
   description: string | null;
+  submitted_by: string | null;
   created_at: string;
 }
 
@@ -52,9 +71,32 @@ function rowToRace(row: RtRaceRow): Race {
     countryCode: row.country_code,
     entryStatus: row.entry_status,
     tags: row.tags ?? [],
+    entryMethods: row.entry_methods ?? [],
     website: row.website ?? undefined,
     description: row.description ?? undefined,
+    submittedBy: row.submitted_by ?? null,
     createdAt: row.created_at,
+  };
+}
+
+/** Columns shared by create and update, derived from a submission. */
+function submissionColumns(submission: RaceSubmission) {
+  return {
+    name: submission.name,
+    date: submission.date,
+    distances: submission.distances,
+    standard_distances: submission.distances
+      .filter((d) => d.kind === "standard")
+      .map((d) => d.distance),
+    city: submission.city,
+    region: submission.region,
+    country: getCountryData(submission.countryCode as TCountryCode).name,
+    country_code: submission.countryCode,
+    entry_status: submission.entryStatus,
+    tags: submission.tags ?? [],
+    entry_methods: submission.entryMethods ?? [],
+    website: submission.website ?? null,
+    description: submission.description ?? null,
   };
 }
 
@@ -207,30 +249,56 @@ export class SupabaseRaceStore implements RaceStore {
     return rows.length > 0 ? rowToRace(rows[0]) : null;
   }
 
-  async createRace(submission: RaceSubmission): Promise<Race> {
+  async createRace(
+    submission: RaceSubmission,
+    submittedBy: string | null,
+  ): Promise<Race> {
+    for (let attempt = 0; ; attempt++) {
+      const { data, error } = await this.client
+        .from(TABLE)
+        .insert({
+          id: generateRaceKey(),
+          ...submissionColumns(submission),
+          submitted_by: submittedBy,
+        })
+        .select()
+        .single();
+
+      if (!error) return rowToRace(data as RtRaceRow);
+      // Primary-key collision: generate a fresh key and retry. Any other
+      // error (including the dedup index) propagates to the route.
+      if (
+        error.code === "23505" &&
+        error.message.includes("rt_races_pkey") &&
+        attempt < 3
+      ) {
+        continue;
+      }
+      throw new Error(`Failed to create race: ${error.message}`);
+    }
+  }
+
+  async updateRace(id: string, submission: RaceSubmission): Promise<Race | null> {
     const { data, error } = await this.client
       .from(TABLE)
-      .insert({
-        name: submission.name,
-        date: submission.date,
-        distances: submission.distances,
-        standard_distances: submission.distances
-          .filter((d) => d.kind === "standard")
-          .map((d) => d.distance),
-        city: submission.city,
-        region: submission.region,
-        country: getCountryData(submission.countryCode as TCountryCode).name,
-        country_code: submission.countryCode,
-        entry_status: submission.entryStatus,
-        tags: submission.tags ?? [],
-        website: submission.website ?? null,
-        description: submission.description ?? null,
-      })
-      .select()
-      .single();
+      .update(submissionColumns(submission))
+      .eq("id", id)
+      .select();
 
-    if (error) throw new Error(`Failed to create race: ${error.message}`);
-    return rowToRace(data as RtRaceRow);
+    if (error) throw new Error(`Failed to update race: ${error.message}`);
+    const rows = data as RtRaceRow[];
+    return rows.length > 0 ? rowToRace(rows[0]) : null;
+  }
+
+  async deleteRace(id: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from(TABLE)
+      .delete()
+      .eq("id", id)
+      .select("id");
+
+    if (error) throw new Error(`Failed to delete race: ${error.message}`);
+    return (data?.length ?? 0) > 0;
   }
 
   async getUserRaceIds(userId: string): Promise<string[]> {

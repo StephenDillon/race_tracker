@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { continents, countries, type TCountryCode } from "countries-list";
 import {
   ENTRY_STATUS_LABELS,
@@ -51,6 +52,8 @@ import {
 } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatDate, formatDistances } from "@/lib/format";
+import { EntryStatusBadge } from "@/components/entry-status-badge";
+import { useSavedRaces } from "@/lib/use-saved-races";
 import { CheckIcon, ChevronDownIcon, FilterIcon, HeartIcon, XIcon } from "lucide-react";
 import type { CityResult } from "@/lib/types";
 
@@ -135,15 +138,6 @@ const ALL_COUNTRIES = (Object.keys(countries) as TCountryCode[])
     continent: countries[code].continent,
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
-
-const STATUS_STYLES: Record<EntryStatus, string> = {
-  open: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300",
-  closed: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-  ballot: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
-  waitlist: "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300",
-  invitation: "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300",
-  sold_out: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300",
-};
 
 function FilterGroup({
   label,
@@ -381,35 +375,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [savedRaceIds, setSavedRaceIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    fetch("/api/user-races")
-      .then((r) => (r.ok ? r.json() : { raceIds: [] }))
-      .then((d: { raceIds: string[] }) => setSavedRaceIds(new Set(d.raceIds)))
-      .catch(() => {});
-  }, []);
-
-  const toggleSaveRace = async (raceId: string) => {
-    const isSaved = savedRaceIds.has(raceId);
-    if (isSaved) {
-      setSavedRaceIds((prev) => {
-        const next = new Set(prev);
-        next.delete(raceId);
-        return next;
-      });
-      await fetch(`/api/user-races?raceId=${encodeURIComponent(raceId)}`, {
-        method: "DELETE",
-      });
-    } else {
-      setSavedRaceIds((prev) => new Set(prev).add(raceId));
-      await fetch("/api/user-races", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raceId }),
-      });
-    }
-  };
+  const { isSaved, toggleSaved } = useSavedRaces();
 
   // Debounce the text search so we don't hit the API on every keystroke.
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -770,12 +736,12 @@ export default function HomePage() {
                       <TableCell>
                         <button
                           type="button"
-                          onClick={() => toggleSaveRace(race.id)}
+                          onClick={() => toggleSaved(race.id)}
                           className="text-muted-foreground hover:text-primary"
-                          aria-label={savedRaceIds.has(race.id) ? "Remove from my races" : "Add to my races"}
+                          aria-label={isSaved(race.id) ? "Remove from my races" : "Add to my races"}
                         >
                           <HeartIcon
-                            className={`size-4 ${savedRaceIds.has(race.id) ? "fill-primary text-primary" : ""}`}
+                            className={`size-4 ${isSaved(race.id) ? "fill-primary text-primary" : ""}`}
                           />
                         </button>
                       </TableCell>
@@ -783,30 +749,19 @@ export default function HomePage() {
                         {formatDate(race.date)}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {race.website ? (
-                          <a
-                            href={race.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-primary hover:underline"
-                          >
-                            {race.name}
-                          </a>
-                        ) : (
-                          race.name
-                        )}
+                        <Link
+                          href={`/races/${encodeURIComponent(race.id)}`}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {race.name}
+                        </Link>
                       </TableCell>
                       <TableCell>{formatDistances(race.distances)}</TableCell>
                       <TableCell>
                         {race.city}, {race.country}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={STATUS_STYLES[race.entryStatus]}
-                        >
-                          {ENTRY_STATUS_LABELS[race.entryStatus]}
-                        </Badge>
+                        <EntryStatusBadge status={race.entryStatus} />
                       </TableCell>
                       <TableCell>
                         {(race.tags ?? []).length > 0 && (

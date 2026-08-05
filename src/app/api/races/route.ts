@@ -2,21 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { continents, countries } from "countries-list";
 import { authFailureResponse, getRequestUser } from "@/lib/auth";
 import { getRaceStore } from "@/lib/db";
+import { ISO_DATE, validateSubmission } from "@/lib/validate-race";
 import {
   ENTRY_STATUSES,
   STANDARD_DISTANCES,
   type ContinentCode,
   type EntryStatus,
-  type RaceDistance,
   type RaceFilters,
-  type RaceSubmission,
   type StandardDistance,
 } from "@/lib/types";
 
 // The in-memory store is per-process state, so never prerender/cache this route.
 export const dynamic = "force-dynamic";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * GET /api/races — list races with filters.
@@ -97,79 +94,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(result);
 }
 
-function validateSubmission(body: unknown): RaceSubmission | string {
-  if (typeof body !== "object" || body === null) return "Body must be a JSON object";
-  const b = body as Record<string, unknown>;
-
-  if (typeof b.name !== "string" || b.name.trim().length === 0) {
-    return "name is required";
-  }
-  if (typeof b.date !== "string" || !ISO_DATE.test(b.date)) {
-    return "date is required (YYYY-MM-DD)";
-  }
-  for (const field of ["city", "region"] as const) {
-    if (typeof b[field] !== "string" || (b[field] as string).trim().length === 0) {
-      return `${field} is required`;
-    }
-  }
-  const countryCode =
-    typeof b.countryCode === "string" ? b.countryCode.toUpperCase() : "";
-  if (!(countryCode in countries)) {
-    return "countryCode must be a valid ISO 3166-1 alpha-2 code";
-  }
-  if (!(ENTRY_STATUSES as readonly string[]).includes(b.entryStatus as string)) {
-    return `entryStatus must be one of: ${ENTRY_STATUSES.join(", ")}`;
-  }
-
-  if (!Array.isArray(b.distances) || b.distances.length === 0) {
-    return "at least one distance is required";
-  }
-  const distances: RaceDistance[] = [];
-  for (const d of b.distances) {
-    if (typeof d !== "object" || d === null) return "invalid distance entry";
-    const dist = d as Record<string, unknown>;
-    if (
-      dist.kind === "standard" &&
-      (STANDARD_DISTANCES as readonly string[]).includes(dist.distance as string)
-    ) {
-      distances.push({
-        kind: "standard",
-        distance: dist.distance as StandardDistance,
-      });
-    } else if (
-      dist.kind === "custom" &&
-      typeof dist.label === "string" &&
-      dist.label.trim().length > 0 &&
-      typeof dist.kilometers === "number" &&
-      dist.kilometers > 0
-    ) {
-      distances.push({
-        kind: "custom",
-        label: dist.label.trim(),
-        kilometers: dist.kilometers,
-      });
-    } else {
-      return "each distance must be a standard distance or a custom {label, kilometers}";
-    }
-  }
-
-  return {
-    name: (b.name as string).trim(),
-    date: b.date as string,
-    distances,
-    city: (b.city as string).trim(),
-    region: (b.region as string).trim(),
-    countryCode,
-    entryStatus: b.entryStatus as EntryStatus,
-    tags: Array.isArray(b.tags) ? (b.tags as unknown[]).filter((t): t is string => typeof t === "string") : [],
-    website: typeof b.website === "string" && b.website.trim() ? b.website.trim() : undefined,
-    description:
-      typeof b.description === "string" && b.description.trim()
-        ? b.description.trim()
-        : undefined,
-  };
-}
-
 /**
  * POST /api/races — submit a new race.
  *
@@ -212,7 +136,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const race = await store.createRace(submission);
+    const race = await store.createRace(submission, auth.user.id);
     return NextResponse.json({ race }, { status: 201 });
   } catch (err) {
     // Backstop for the unique dedup index racing with the pre-check above.

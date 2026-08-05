@@ -11,11 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOutIcon, SettingsIcon, UserIcon } from "lucide-react";
+import { LogOutIcon, SettingsIcon, ShieldIcon, UserIcon } from "lucide-react";
 
 interface User {
   id: string;
   email: string;
+  role?: "admin" | "moderator" | "user";
 }
 
 export function UserMenu() {
@@ -71,6 +72,14 @@ export function UserMenu() {
               Settings
             </Link>
           </DropdownMenuItem>
+          {user.role === "admin" && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin/users" className="gap-2">
+                <ShieldIcon className="size-4" />
+                Manage users
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={handleLogout} className="gap-2">
             <LogOutIcon className="size-4" />
             Logout

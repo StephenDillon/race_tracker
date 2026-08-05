@@ -23,6 +23,7 @@ The main page shows a table of **25 upcoming races** with a filter bar above it,
 
 - **Every table this project creates is prefixed with `rt_`** (e.g. `rt_races`). No exceptions.
 - Schema changes go in numbered SQL files under `supabase/migrations/`; seed data lives in `supabase/seed.sql`.
+- Race ids are short 8-char keys (lowercase a–z0–9) generated **by the app server** on POST (`generateRaceKey` in `src/lib/db/supabase.ts`, collision-retried); the `rt_races.id` column has no DB default.
 - RLS is enabled on all `rt_` tables with **no policies**: the backend uses the service role key (which bypasses RLS), so nothing else can read or write the tables. Keep new tables on this pattern.
 
 ## Hard restrictions
@@ -57,8 +58,10 @@ supabase/
 
 - Auth: Supabase Auth with httpOnly session cookies (`src/lib/auth.ts`), plus per-user **API keys** for the REST API (`src/lib/api-keys.ts`, `rt_api_keys` table, managed in `/settings`).
 - API keys are `rt_` + 48 hex chars; only a SHA-256 hash is stored, the full key is shown once at creation. Sent as `Authorization: Bearer rt_...`. Rate limit: 100 requests/hour per key (fixed window). Max 10 active keys per user.
-- Protected endpoints use `getRequestUser()` (session cookie OR API key): `POST /api/races`, all of `/api/user-races`. Key management (`/api/api-keys`) is session-only so a leaked key can't mint or revoke keys. Race listing/detail endpoints stay public.
+- Protected endpoints use `getRequestUser()` (session cookie OR API key): `POST /api/races`, `PATCH`/`DELETE /api/races/[id]`, all of `/api/user-races`. Key management (`/api/api-keys`) is session-only so a leaked key can't mint or revoke keys. Race listing/detail endpoints stay public.
 - Duplicate races are rejected (409): same name + date + city + country, case-insensitive — pre-checked via `findDuplicateRace` and enforced by the `rt_races_dedup_idx` unique index.
+- **RBAC** (`src/lib/roles.ts`, `rt_user_roles` table; a user with no row is a plain `user`): `admin` manages roles at `/admin/users` (API: `/api/users`, session + admin only; admins can't change their own role); `moderator` (and admin) can edit/delete any race; `user` can edit only races they submitted (`rt_races.submitted_by`) and cannot delete. `/api/auth/me` returns the role for UI gating.
+- Race submission payload validation lives in `src/lib/validate-race.ts` (shared by POST and PATCH). Races carry `entryMethods` (`[{method, opens, closes}]`, jsonb) — the World Majors page is driven by races tagged `World Major` and their entry methods; race facts are corrected via the edit page (`/races/[id]/edit`), not code.
 
 ## Conventions
 

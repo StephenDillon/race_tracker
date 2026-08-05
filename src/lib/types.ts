@@ -43,6 +43,15 @@ export const ENTRY_STATUS_LABELS: Record<EntryStatus, string> = {
   sold_out: "Sold out",
 };
 
+/** A way to gain entry into a race (lottery, qualifier, charity, …). */
+export interface EntryMethod {
+  method: string;
+  /** ISO date the window opens. */
+  opens: string;
+  /** ISO date the window closes. */
+  closes: string;
+}
+
 export interface Race {
   id: string;
   name: string;
@@ -57,14 +66,37 @@ export interface Race {
   countryCode: string;
   entryStatus: EntryStatus;
   tags: string[];
+  /** Ways to enter the race with their windows; mainly used for majors. */
+  entryMethods: EntryMethod[];
   website?: string;
   description?: string;
+  /** id of the user who submitted the race; null for seeded/legacy rows. */
+  submittedBy: string | null;
   /** Set by the server on submission. */
   createdAt: string;
 }
 
-/** Payload accepted when someone submits a race. `country` is derived server-side from `countryCode`. */
-export type RaceSubmission = Omit<Race, "id" | "createdAt" | "country">;
+/** Payload accepted when someone submits or edits a race. `country` is derived server-side from `countryCode`. */
+export type RaceSubmission = Omit<
+  Race,
+  "id" | "createdAt" | "country" | "submittedBy"
+>;
+
+export const ROLES = ["admin", "moderator", "user"] as const;
+
+/**
+ * RBAC role. Admins manage user roles and can do everything moderators can;
+ * moderators edit/delete any race; users edit only races they submitted.
+ */
+export type Role = (typeof ROLES)[number];
+
+/** A user account with its role, for the admin user-management page. */
+export interface UserAccount {
+  id: string;
+  email: string | null;
+  role: Role;
+  createdAt: string;
+}
 
 /** Continent codes as used by countries-list (AF, AN, AS, EU, NA, OC, SA). */
 export type ContinentCode = "AF" | "AN" | "AS" | "EU" | "NA" | "OC" | "SA";

@@ -17,7 +17,12 @@ import type {
 export interface RaceStore {
   listRaces(filters: RaceFilters): Promise<RaceListResult>;
   getRace(id: string): Promise<Race | null>;
-  createRace(submission: RaceSubmission): Promise<Race>;
+  /** Create a race. `submittedBy` is the id of the submitting user (null for system imports). */
+  createRace(submission: RaceSubmission, submittedBy: string | null): Promise<Race>;
+  /** Replace a race's editable fields. Returns null when the race doesn't exist. */
+  updateRace(id: string, submission: RaceSubmission): Promise<Race | null>;
+  /** Delete a race. Returns false when the race doesn't exist. */
+  deleteRace(id: string): Promise<boolean>;
   /**
    * Find an existing race with the same name, date, and location
    * (city + country), case-insensitively. Used to reject duplicates.
