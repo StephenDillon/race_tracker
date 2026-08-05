@@ -221,6 +221,26 @@ export type RunClubSubmission = Omit<
   "id" | "createdAt" | "country" | "ownerId"
 >;
 
+/**
+ * One dated occurrence of a club's scheduled run, expanded from the club's
+ * `runs` schedule (see `src/lib/club-runs.ts`). Nothing like this is stored —
+ * occurrences are always computed for the window being displayed.
+ */
+export interface UpcomingClubRun {
+  clubId: string;
+  clubName: string;
+  city: string;
+  /** Display name derived from the club's countryCode. */
+  country: string;
+  /** ISO date (YYYY-MM-DD) the run takes place. */
+  date: string;
+  title: string;
+  /** 24h "HH:MM" start time; absent only for one-off events without one. */
+  time?: string;
+  /** Meetup spot for this run, falling back to the club's address. */
+  location?: string;
+}
+
 /** Filters accepted by the run club listing API. Combined with AND. */
 export interface RunClubFilters {
   /** Free-text search on club name. */

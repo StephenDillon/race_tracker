@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { refreshCurrentUser, useCurrentUser } from "@/lib/use-current-user";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,25 +13,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOutIcon, SettingsIcon, ShieldIcon, UserIcon } from "lucide-react";
 
-interface User {
-  id: string;
-  email: string;
-  role?: "admin" | "moderator" | "user";
-}
-
 export function UserMenu() {
   const router = useRouter();
-  const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => setUser(d.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setLoaded(true));
-  }, [pathname]);
+  const { user, loaded } = useCurrentUser();
 
   if (!loaded) return null;
 
@@ -45,7 +29,8 @@ export function UserMenu() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
+    // Refresh the shared user so the nav tabs drop signed-in-only entries too.
+    await refreshCurrentUser();
     router.push("/");
     router.refresh();
   };

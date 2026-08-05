@@ -95,7 +95,7 @@ export default function RaceDetailPage({
           <CardContent className="flex flex-col items-center gap-4 py-8 text-center">
             <p className="text-muted-foreground">Race not found.</p>
             <Button variant="outline" asChild>
-              <Link href="/">
+              <Link href="/races">
                 <ArrowLeftIcon className="size-4" />
                 Back to races
               </Link>
@@ -110,7 +110,7 @@ export default function RaceDetailPage({
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
       <div>
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/">
+          <Link href="/races">
             <ArrowLeftIcon className="size-4" />
             Back to races
           </Link>

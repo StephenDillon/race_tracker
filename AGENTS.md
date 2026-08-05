@@ -4,7 +4,9 @@
 
 A website to easily find races you wish to participate in. The initial focus is **running** (other sports may come later). Anyone can submit races using standard known distances (5K, 10K, Half Marathon, Marathon, 50K, 50 Mile, 100K, 100 Mile) or a custom distance if they wish.
 
-The main page shows a table of **25 upcoming races** with a filter bar above it, including:
+The home page (`/`) is a **dashboard**: signed out it introduces the site and points at Races and Run Clubs; signed in it shows the user's upcoming saved races and the club runs happening in the next week.
+
+The races page (`/races`) shows a table of **25 upcoming races** with a filter bar above it, including:
 
 - Free-text search on race name
 - Dates / date range
@@ -37,12 +39,18 @@ The main page shows a table of **25 upcoming races** with a filter bar above it,
 ```
 src/
   app/
-    page.tsx            # Main page: race table (25/page) + filter panel (client component, fetches /api/races)
+    page.tsx            # Dashboard home: signed-out intro, or the user's upcoming races + club runs
+    races/page.tsx      # Race table (25/page) + filter panel (client component, fetches /api/races)
     submit/page.tsx     # Race submission form (POSTs to /api/races)
     api/races/route.ts  # GET (list + filters, paginated), POST (submit a race)
     api/races/[id]/route.ts  # GET single race
+    api/run-clubs/upcoming/route.ts  # GET club runs in the next N days (expanded schedules)
+  components/
+    nav-tabs.tsx        # Header tabs: Home, Races, Run Clubs, [My Races when signed in], World Majors
   lib/
     types.ts            # Shared domain types (Race, RaceDistance, EntryStatus, filters) — no server imports
+    club-runs.ts        # Expands club schedules into dated occurrences (pure, no server imports)
+    use-current-user.ts # Shared /api/auth/me hook — one fetch per navigation, broadcast to subscribers
     db/
       store.ts          # RaceStore interface — the only contract the app depends on
       index.ts          # getRaceStore() — picks Supabase (env vars set) or memory (fallback)
@@ -68,6 +76,7 @@ supabase/
 - **Privilege management is session-only**: role changes (`/api/users*`) and API key management (`/api/api-keys*`) reject API-key auth entirely, so a leaked key can never escalate itself or mint more keys. Keep any future route that grants or manages access on this pattern.
 - Race submission payload validation lives in `src/lib/validate-race.ts` (shared by POST and PATCH). Races carry `entryMethods` (`[{method, opens, closes}]`, jsonb) — the World Majors page is driven by races tagged `World Major` and their entry methods; race facts are corrected via the edit page (`/races/[id]/edit`), not code.
 - **Address search** (`src/lib/places.ts`, `/api/places` + `/api/places/[placeId]`): Google Places API (New), proxied server-side — `GOOGLE_PLACES_API_KEY` never reaches the browser, so no Maps JS SDK. Both routes require login (Places is metered; an open proxy is a billing drain) and 503 when the key is unset, leaving manual city/country entry working. Autocomplete and details calls share a client-generated session token so Google bills them as one session. A submitted `placeId` is **re-resolved server-side** (`applyPlaceDetails`) to derive country, coordinates, and formatted address — never trust those from the client; `city`/`region` are prefilled from the same lookup but stay user-editable, since Google's locality component is unreliable across countries.
+- **Navigation & dashboard**: header tabs come from `src/components/nav-tabs.tsx` — Home, Races, Run Clubs, World Majors always; My Races only when signed in. Client components read the session through `useCurrentUser()` (`src/lib/use-current-user.ts`) rather than fetching `/api/auth/me` themselves, so the header and page body agree and share one request; call `refreshCurrentUser()` after login/logout. Club runs on the dashboard come from `GET /api/run-clubs/upcoming`, which expands stored schedules with `upcomingClubRuns` (`src/lib/club-runs.ts`) — occurrences are never stored.
 - **Run clubs** (`rt_run_clubs`, spec in `specs/run-clubs.md`): pages `/run-clubs` (table + name/location search), `/run-clubs/new`, `/run-clubs/[id]`, `/run-clubs/[id]/edit`; API `/api/run-clubs` (+`/[id]`), validation in `src/lib/validate-run-club.ts`. Required: name, city, country; optional: street address, website, runs. A club's runs are a jsonb schedule array (`ClubRun` in `src/lib/types.ts`): weekly (day+time), monthly (nth-weekday+time), or one-off events (date) — no generated occurrence rows. The creator (`owner_id`) owns the club; owner can edit/delete their own, moderators/admins any.
 
 ## Conventions

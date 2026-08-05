@@ -5,9 +5,18 @@ import Link from "next/link";
 import type { Race } from "@/lib/types";
 import { formatCountdown, formatDate, formatDistances } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
+import { RequireLogin } from "@/components/require-login";
 import { HeartIcon } from "lucide-react";
 
 export default function MyRacesPage() {
+  return (
+    <RequireLogin message="Log in to see the races you've saved.">
+      <SavedRaces />
+    </RequireLogin>
+  );
+}
+
+function SavedRaces() {
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -84,7 +84,7 @@ export default function EditRacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      router.push("/");
+      router.push("/races");
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Failed to delete race");
       setDeleting(false);

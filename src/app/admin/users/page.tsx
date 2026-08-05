@@ -91,7 +91,7 @@ export default function AdminUsersPage() {
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             This page is for admins only.{" "}
-            <Link href="/" className="text-primary underline">
+            <Link href="/races" className="text-primary underline">
               Back to races
             </Link>
           </CardContent>

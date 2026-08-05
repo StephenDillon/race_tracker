@@ -28,7 +28,7 @@ export default function SubmitRacePage() {
             if (!res.ok) {
               throw new Error(data.error ?? `Request failed (${res.status})`);
             }
-            router.push("/");
+            router.push("/races");
           }}
         />
       </div>

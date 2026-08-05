@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useCurrentUser } from "@/lib/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogInIcon } from "lucide-react";
@@ -19,20 +19,13 @@ export function RequireLogin({
   message: string;
   children: React.ReactNode;
 }) {
-  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const { user, loaded } = useCurrentUser();
 
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : { user: null }))
-      .then((d: { user: unknown }) => setLoggedIn(!!d.user))
-      .catch(() => setLoggedIn(false));
-  }, []);
-
-  if (loggedIn === null) {
+  if (!loaded) {
     return <p className="text-center text-muted-foreground py-8">Loading…</p>;
   }
 
-  if (!loggedIn) {
+  if (!user) {
     return (
       <div className="mx-auto max-w-md pt-8">
         <Card>
