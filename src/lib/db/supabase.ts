@@ -185,6 +185,28 @@ export class SupabaseRaceStore implements RaceStore {
     return data ? rowToRace(data as RtRaceRow) : null;
   }
 
+  async findDuplicateRace(
+    name: string,
+    date: string,
+    city: string,
+    countryCode: string,
+  ): Promise<Race | null> {
+    // ilike with all wildcards escaped = case-insensitive equality.
+    const exact = (s: string) => s.replace(/([\\%_])/g, "\\$1");
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select("*")
+      .ilike("name", exact(name))
+      .eq("date", date)
+      .ilike("city", exact(city))
+      .eq("country_code", countryCode.toUpperCase())
+      .limit(1);
+
+    if (error) throw new Error(`Failed to check for duplicate race: ${error.message}`);
+    const rows = data as RtRaceRow[];
+    return rows.length > 0 ? rowToRace(rows[0]) : null;
+  }
+
   async createRace(submission: RaceSubmission): Promise<Race> {
     const { data, error } = await this.client
       .from(TABLE)

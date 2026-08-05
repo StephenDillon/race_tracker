@@ -53,6 +53,13 @@ supabase/
   seed.sql              # Seed data for rt_races (mirrors src/lib/db/seed.ts)
 ```
 
+## Auth & REST API
+
+- Auth: Supabase Auth with httpOnly session cookies (`src/lib/auth.ts`), plus per-user **API keys** for the REST API (`src/lib/api-keys.ts`, `rt_api_keys` table, managed in `/settings`).
+- API keys are `rt_` + 48 hex chars; only a SHA-256 hash is stored, the full key is shown once at creation. Sent as `Authorization: Bearer rt_...`. Rate limit: 100 requests/hour per key (fixed window). Max 10 active keys per user.
+- Protected endpoints use `getRequestUser()` (session cookie OR API key): `POST /api/races`, all of `/api/user-races`. Key management (`/api/api-keys`) is session-only so a leaked key can't mint or revoke keys. Race listing/detail endpoints stay public.
+- Duplicate races are rejected (409): same name + date + city + country, case-insensitive — pre-checked via `findDuplicateRace` and enforced by the `rt_races_dedup_idx` unique index.
+
 ## Conventions
 
 - TypeScript strict mode; keep `npm run build` green.

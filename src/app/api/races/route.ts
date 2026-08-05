@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { continents, countries } from "countries-list";
+import { authFailureResponse, getRequestUser } from "@/lib/auth";
 import { getRaceStore } from "@/lib/db";
 import {
   ENTRY_STATUSES,
@@ -169,8 +170,18 @@ function validateSubmission(body: unknown): RaceSubmission | string {
   };
 }
 
-/** POST /api/races — submit a new race. */
+/**
+ * POST /api/races — submit a new race.
+ *
+ * Requires authentication: a logged-in session, or an API key sent as
+ * `Authorization: Bearer rt_...` (created under Settings; rate-limited).
+ * Rejects duplicates (409) when a race with the same name, date, city,
+ * and country already exists.
+ */
 export async function POST(request: NextRequest) {
+  const auth = await getRequestUser(request);
+  if (!auth.ok) return authFailureResponse(auth);
+
   let body: unknown;
   try {
     body = await request.json();
@@ -183,6 +194,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: submission }, { status: 400 });
   }
 
-  const race = await getRaceStore().createRace(submission);
-  return NextResponse.json({ race }, { status: 201 });
+  const store = getRaceStore();
+  const duplicate = await store.findDuplicateRace(
+    submission.name,
+    submission.date,
+    submission.city,
+    submission.countryCode,
+  );
+  if (duplicate) {
+    return NextResponse.json(
+      {
+        error: "A race with the same name, date, and location already exists",
+        race: duplicate,
+      },
+      { status: 409 },
+    );
+  }
+
+  try {
+    const race = await store.createRace(submission);
+    return NextResponse.json({ race }, { status: 201 });
+  } catch (err) {
+    // Backstop for the unique dedup index racing with the pre-check above.
+    if (err instanceof Error && err.message.includes("rt_races_dedup_idx")) {
+      return NextResponse.json(
+        { error: "A race with the same name, date, and location already exists" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 }

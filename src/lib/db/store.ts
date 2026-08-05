@@ -18,6 +18,16 @@ export interface RaceStore {
   listRaces(filters: RaceFilters): Promise<RaceListResult>;
   getRace(id: string): Promise<Race | null>;
   createRace(submission: RaceSubmission): Promise<Race>;
+  /**
+   * Find an existing race with the same name, date, and location
+   * (city + country), case-insensitively. Used to reject duplicates.
+   */
+  findDuplicateRace(
+    name: string,
+    date: string,
+    city: string,
+    countryCode: string,
+  ): Promise<Race | null>;
   /** Distinct cities (with their country) whose name matches `q`. */
   searchCities(q: string, limit: number): Promise<CityResult[]>;
   /** Get all race IDs saved by a user. */

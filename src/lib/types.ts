@@ -101,6 +101,20 @@ export interface RaceListResult {
   total: number;
 }
 
+/**
+ * Metadata about a REST API key, safe to send to the client. The key itself
+ * is only ever returned once, at creation — the server stores just a hash.
+ */
+export interface ApiKeyMeta {
+  id: string;
+  name: string;
+  /** First few characters of the key, for display (e.g. "rt_1a2b3c4d"). */
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revoked: boolean;
+}
+
 /** A distinct city that hosts at least one race, for location search. */
 export interface CityResult {
   city: string;

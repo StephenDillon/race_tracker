@@ -1,7 +1,9 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyApiKey } from "@/lib/api-keys";
 
 const TOKEN_COOKIE = "rt_token";
 const REFRESH_COOKIE = "rt_refresh";
@@ -99,6 +101,56 @@ export async function getCurrentUser() {
     id: refreshed.user!.id,
     email: refreshed.user!.email,
   };
+}
+
+/**
+ * Result of authenticating an incoming API request. `via` says which
+ * credential was used; API-key auth only knows the user id (no email).
+ */
+export type RequestAuth =
+  | { ok: true; user: { id: string; email?: string | null }; via: "session" | "api_key" }
+  | { ok: false; status: number; error: string; retryAfterSeconds?: number };
+
+/**
+ * Authenticate a request for protected API routes. Accepts either an
+ * `Authorization: Bearer rt_...` API key (rate-limited, see api-keys.ts)
+ * or the browser session cookie. An Authorization header, when present,
+ * wins — its failures are not silently downgraded to the cookie session.
+ */
+export async function getRequestUser(request: Request): Promise<RequestAuth> {
+  const header = request.headers.get("authorization");
+  if (header) {
+    const match = /^Bearer\s+(.+)$/i.exec(header);
+    if (!match) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Malformed Authorization header (expected: Bearer <api key>)",
+      };
+    }
+    const result = await verifyApiKey(match[1].trim());
+    if (!result.ok) return result;
+    return { ok: true, user: { id: result.userId }, via: "api_key" };
+  }
+
+  const user = await getCurrentUser();
+  if (user) return { ok: true, user, via: "session" };
+
+  return {
+    ok: false,
+    status: 401,
+    error:
+      "Authentication required: log in, or send an API key via 'Authorization: Bearer rt_...' (create one under Settings)",
+  };
+}
+
+/** JSON error response for a failed getRequestUser, with Retry-After on 429s. */
+export function authFailureResponse(failure: Extract<RequestAuth, { ok: false }>) {
+  const res = NextResponse.json({ error: failure.error }, { status: failure.status });
+  if (failure.retryAfterSeconds !== undefined) {
+    res.headers.set("Retry-After", String(failure.retryAfterSeconds));
+  }
+  return res;
 }
 
 async function setSessionCookies(accessToken: string, refreshToken: string) {
