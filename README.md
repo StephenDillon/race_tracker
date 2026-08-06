@@ -52,6 +52,8 @@ One-time setup:
 3. In Vercel **Project Settings → Git**, turn off automatic deploys (set the Ignored Build Step to `exit 0`, or disconnect the repo). The workflow deploys instead; leaving both on deploys everything twice and loses the migrate-then-deploy ordering.
 4. In GitHub **Settings → Secrets and variables → Actions**, add secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the last two are in `.vercel/repo.json` or `.vercel/project.json` after running `vercel link`), plus `DATABASE_URL` and `DIRECT_URL`. Add the repository **variable** `DB_SCHEMA` = `rt_prod`.
 
+   When creating the token at [vercel.com/account/tokens](https://vercel.com/account/tokens), set its **Scope** to the team that owns the project. A token left on a different scope, or narrowed to a single project, authenticates fine but cannot read project settings — the workflow's "Verify Vercel credentials" step tells you which of those it is.
+
 The first deploy creates `rt_prod` and builds it from empty — there is nothing to migrate or import.
 
 ## Project guidance

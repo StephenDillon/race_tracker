@@ -66,8 +66,11 @@ jobs:
       - name: Build
         run: vercel build --prod
 
+      # Informational only. `prisma migrate status` exits non-zero whenever
+      # anything is pending, which is the normal case here — the next step is
+      # what applies them.
       - name: Show pending migrations
-        run: npm run db:status
+        run: npm run db:status || true
 
       # Migrations run before the new code goes live, so the deployment never
       # serves against a schema it does not expect. Additive migrations keep
