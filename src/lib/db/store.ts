@@ -13,10 +13,10 @@ import type {
 } from "@/lib/types";
 
 /**
- * Data store interface. The rest of the server code only talks to this,
- * so swapping the in-memory implementation for Supabase later means
- * implementing this interface with the Supabase client (using server-side
- * env vars) and changing the export in `index.ts` — nothing else.
+ * Data store interface. The rest of the server code only talks to this, so
+ * the database access it hides — currently Prisma, in `prisma-store.ts` —
+ * can be replaced by implementing this interface and changing the one
+ * construction site in `index.ts`.
  */
 export interface RaceStore {
   listRaces(filters: RaceFilters): Promise<RaceListResult>;

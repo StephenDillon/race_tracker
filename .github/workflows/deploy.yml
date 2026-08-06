@@ -1,0 +1,75 @@
+name: Deploy
+
+# Production deploys. Vercel's own Git integration must be turned off for
+# this project (Vercel → Settings → Git → Ignored Build Step, or disconnect
+# the repo), otherwise every push deploys twice and the migration ordering
+# below is not guaranteed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      baseline_existing_schema:
+        description: >-
+          One-time only: record the init migration as already applied, for a
+          database that was built by the old supabase/migrations SQL files.
+        type: boolean
+        default: false
+
+# Never let two deploys interleave — one could be mid-migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate and deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      DB_SCHEMA: ${{ vars.DB_SCHEMA || 'public' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      # Build before touching the database: a broken build should never leave
+      # a migrated database behind.
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Show pending migrations
+        run: npm run db:status
+
+      - name: Baseline pre-Prisma schema
+        if: inputs.baseline_existing_schema
+        run: npx prisma migrate resolve --applied 20260805000000_init
+
+      # Migrations run before the new code goes live, so the deployment never
+      # serves against a schema it does not expect. Additive migrations keep
+      # this safe for the moments when old and new code overlap.
+      - name: Apply migrations
+        run: npm run db:deploy
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

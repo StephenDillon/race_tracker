@@ -18,19 +18,20 @@ The races page (`/races`) shows a table of **25 upcoming races** with a filter b
 ## Stack (do not deviate without explicit approval)
 
 - **UI**: Next.js (App Router) with Tailwind CSS, in `src/app/`. Components come from **shadcn/ui** (vendored into `src/components/ui/`, configured via `components.json`) — use/add shadcn components rather than hand-rolling styled elements.
-- **Database**: Supabase (Postgres). The data layer auto-selects the Supabase store when `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are set, and falls back to an in-memory store (`src/lib/db/memory.ts`, seeded from `src/lib/db/seed.ts`) for local dev without credentials.
-- **Deployment**: Vercel (env vars set in the Vercel project, never committed).
+- **Database**: Supabase (Postgres), queried through **Prisma** (`src/lib/db/prisma-store.ts`). Supabase-js is now only used for Auth. There is no in-memory fallback store — `DATABASE_URL` is required.
+- **Deployment**: Vercel, driven by GitHub Actions (`.github/workflows/deploy.yml`) — build, then migrate, then activate, so the new code never serves against an unmigrated schema. Vercel's own Git auto-deploy is off. Env vars live in the Vercel project and in GitHub Actions secrets, never committed.
 
 ## Database rules
 
 - **Every table this project creates is prefixed with `rt_`** (e.g. `rt_races`). No exceptions.
-- Schema changes go in numbered SQL files under `supabase/migrations/`; seed data lives in `supabase/seed.sql`.
-- Race ids are short 8-char keys (lowercase a–z0–9) generated **by the app server** on POST (`generateRaceKey` in `src/lib/db/supabase.ts`, collision-retried); the `rt_races.id` column has no DB default.
-- RLS is enabled on all `rt_` tables with **no policies**: the backend uses the service role key (which bypasses RLS), so nothing else can read or write the tables. Keep new tables on this pattern.
+- **Prisma owns the schema.** Change `prisma/schema.prisma`, then `npm run db:migrate` — never hand-write DDL in the Supabase SQL editor. Full workflow, including baselining an existing database: [prisma/README.md](./prisma/README.md). The old `supabase/migrations/*.sql` files are historical and must not be run or extended.
+- **Which Postgres schema the tables live in is configuration, not code.** `DB_SCHEMA` picks it (`local_dev` locally, `public` in production) and `src/lib/db/connection.ts` is the only place that reads it. Nothing in `prisma/` may name a schema — no `public.` prefixes in migration SQL — or the same migration can no longer build both.
+- Race and club ids are short 8-char keys (lowercase a–z0–9) generated **by the app server** on create (`generateRaceKey` in `src/lib/db/prisma-store.ts`, collision-retried); the id columns have no DB default.
+- RLS is enabled on all `rt_` tables with **no policies**: the backend connects as the database owner (which bypasses RLS), so nothing reached through PostgREST or an anon key can touch them. Prisma cannot express RLS, so **a new `rt_` table must add its own `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` to the migration by hand**, along with any CHECK constraints and `lower(...)` indexes.
 
 ## Hard restrictions
 
-1. **All API keys and secrets stay on the backend only.** Never expose Supabase keys (or any secret) to the client. No `NEXT_PUBLIC_` prefix for anything sensitive. Secrets come from server-side env vars (see `.env.example`) and are never committed.
+1. **All API keys and secrets stay on the backend only.** Never expose the database connection string or Supabase keys (or any secret) to the client. No `NEXT_PUBLIC_` prefix for anything sensitive. Secrets come from server-side env vars (see `.env.example`) and are never committed.
 2. **All database interactions are server-side.** The UI never talks to Supabase (or any datastore) directly — it always calls back to our own API routes on Vercel (`src/app/api/**`), which are the only code allowed to touch the data layer.
 3. The data layer (`src/lib/db/`) imports `server-only`, so importing it from client code is a build error. Keep it that way.
 
@@ -53,18 +54,22 @@ src/
     use-current-user.ts # Shared /api/auth/me hook — one fetch per navigation, broadcast to subscribers
     db/
       store.ts          # RaceStore interface — the only contract the app depends on
-      index.ts          # getRaceStore() — picks Supabase (env vars set) or memory (fallback)
-      supabase.ts       # Supabase implementation (rt_races table, service role key)
-      memory.ts         # In-memory implementation (local dev fallback)
-      seed.ts           # Seed races
-supabase/
-  migrations/           # SQL migrations (rt_-prefixed tables)
-  seed.sql              # Seed data for rt_races (mirrors src/lib/db/seed.ts)
+      index.ts          # getRaceStore() — the single entry point to the data layer
+      prisma-store.ts   # RaceStore implemented with Prisma (all rt_ table queries live here)
+      prisma.ts         # PrismaClient singleton (pg driver adapter, schema from DB_SCHEMA)
+      connection.ts     # DATABASE_URL / DIRECT_URL / DB_SCHEMA — the only reader of those vars
+  generated/prisma/     # Generated Prisma client — gitignored, rebuilt by `prisma generate`
+prisma/
+  schema.prisma         # Source of truth for the schema
+  migrations/           # Migration history (schema-agnostic SQL — never schema-qualified)
+  seed.mjs              # Starter races + World Major entry methods (`npm run db:seed`)
+  README.md             # Migration workflow, baselining, connection strings
+supabase/               # Historical pre-Prisma SQL — do not run, do not extend
 ```
 
 ## Auth & REST API
 
-- Auth: Supabase Auth with httpOnly session cookies (`src/lib/auth.ts`), plus per-user **API keys** for the REST API (`src/lib/api-keys.ts`, `rt_api_keys` table, managed in `/settings`).
+- Auth: Supabase Auth with httpOnly session cookies (`src/lib/auth.ts`) — the one part of the app that still talks to Supabase directly, since accounts live in `auth.users`, not in our tables. Plus per-user **API keys** for the REST API (`src/lib/api-keys.ts`, `rt_api_keys` table, managed in `/settings`).
 - API keys are `rt_` + 48 hex chars; only a SHA-256 hash is stored, the full key is shown once at creation. Sent as `Authorization: Bearer rt_...`. Rate limit: 100 requests/hour per key (fixed window). Max 10 active keys per user.
 - Protected endpoints use `getRequestUser()` (session cookie OR API key): `POST /api/races`, `PATCH`/`DELETE /api/races/[id]`, all of `/api/user-races`. Key management (`/api/api-keys`) is session-only so a leaked key can't mint or revoke keys. Race listing/detail endpoints stay public.
 - Duplicate races are rejected (409): same name + date + city + country, case-insensitive — pre-checked via `findDuplicateRace` and enforced by the `rt_races_dedup_idx` unique index.
@@ -91,3 +96,7 @@ supabase/
 - `npm run dev` — dev server
 - `npm run build` — production build (run before pushing)
 - `npm start` — serve production build
+- `npm run db:migrate` — create and apply a migration from `prisma/schema.prisma`
+- `npm run db:deploy` — apply pending migrations (CI / production)
+- `npm run db:seed` — starter races, idempotent
+- `npm run db:reset` — rebuild `DB_SCHEMA` from scratch and re-seed

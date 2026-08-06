@@ -1,0 +1,149 @@
+// Race Tracker database schema.
+//
+// Every table is prefixed with rt_ (see AGENTS.md). The Postgres *schema*
+// these tables live in is not written here — it comes from DB_SCHEMA at
+// runtime (see src/lib/db/connection.ts), so the same migrations can build
+// local_dev, public, or a per-PR schema. Never schema-qualify anything in
+// this file or in a migration, or that portability is lost.
+//
+// Things Prisma cannot express live as hand-written SQL in the migrations:
+// row level security, the entry_status / role CHECK constraints, and the
+// lower(...) functional indexes. Prisma leaves them alone — but they are
+// not recreated automatically either, so a new rt_ table needs its RLS
+// statement added to the migration by hand.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Races. Ids are short 8-char keys minted by the app server
+/// (generateRaceKey in src/lib/db/prisma-store.ts) — no DB default, so
+/// nothing else can create an id in another format.
+model RtRace {
+  id String @id
+
+  name String
+  date DateTime @db.Date
+
+  /// Distances as submitted:
+  ///   {"kind":"standard","distance":"5K"}
+  ///   {"kind":"custom","label":"...","kilometers":7.7}
+  distances Json
+  /// Denormalized standard distances from `distances`, for array-overlap filtering.
+  standardDistances String[] @default([]) @map("standard_distances")
+
+  city        String
+  region      String
+  country     String
+  countryCode String @map("country_code")
+
+  /// One of: open, closed, ballot, waitlist, invitation, sold_out.
+  /// Enforced by a CHECK constraint added in the init migration.
+  entryStatus String @map("entry_status")
+
+  tags String[] @default([])
+
+  /// [{"method":"Lottery","opens":"2025-10-15","closes":"2025-12-01"}, ...]
+  /// Drives the World Majors page.
+  entryMethods Json @default("[]") @map("entry_methods")
+
+  website     String?
+  description String?
+
+  /// Submitting user (auth.users.id). Null for seeded/system rows, which
+  /// only moderators and admins can edit.
+  submittedBy String?  @map("submitted_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  savedBy RtUserRace[]
+
+  @@index([date])
+  @@index([entryStatus])
+  @@index([countryCode])
+  @@index([standardDistances(ops: ArrayOps)], type: Gin)
+  @@index([tags(ops: ArrayOps)], type: Gin)
+  @@map("rt_races")
+}
+
+/// Races saved to a user's list.
+model RtUserRace {
+  userId    String   @map("user_id") @db.Uuid
+  raceId    String   @map("race_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  race RtRace @relation(fields: [raceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, raceId])
+  // Index names are pinned to the ones the pre-Prisma SQL migrations created,
+  // so an existing database baselines onto this schema with no diff.
+  @@index([userId], map: "rt_user_races_user_idx")
+  @@map("rt_user_races")
+}
+
+/// REST API keys. Only the SHA-256 hash of a key is stored; the plaintext
+/// token is shown to the user once, at creation.
+model RtApiKey {
+  id     String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId String @map("user_id") @db.Uuid
+  name   String
+
+  keyHash   String @unique @map("key_hash")
+  keyPrefix String @map("key_prefix")
+
+  /// Fixed-window rate limiting state; the window length and limit live in
+  /// app code (src/lib/api-keys.ts).
+  windowStart DateTime? @map("window_start") @db.Timestamptz(6)
+  windowCount Int       @default(0) @map("window_count")
+
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "rt_api_keys_user_idx")
+  @@map("rt_api_keys")
+}
+
+/// RBAC. A user with no row here is a plain "user".
+/// Role is one of: admin, moderator, user (CHECK constraint in the migration).
+model RtUserRole {
+  userId    String   @id @map("user_id") @db.Uuid
+  role      String
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("rt_user_roles")
+}
+
+/// Community run clubs. `runs` is a schedule (weekly / monthly / one-off),
+/// see ClubRun in src/lib/types.ts — occurrences are never stored.
+model RtRunClub {
+  id   String @id
+  name String
+
+  /// Street-level meetup address is optional; city + country are the minimum.
+  address     String?
+  city        String
+  region      String?
+  country     String
+  countryCode String  @map("country_code")
+
+  website String?
+  runs    Json    @default("[]")
+
+  /// Google Places data, all nullable — clubs can be entered manually.
+  placeId          String? @map("place_id")
+  formattedAddress String? @map("formatted_address")
+  /// Stored for a future "clubs near me" radius search; nothing reads them yet.
+  latitude         Float?
+  longitude        Float?
+
+  ownerId   String   @map("owner_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([latitude, longitude], map: "rt_run_clubs_latlng_idx")
+  @@map("rt_run_clubs")
+}

@@ -1,0 +1,81 @@
+name: CI
+
+# Checks for pull requests. Pushes to main are checked by deploy.yml, which
+# runs the same gates before it deploys anything.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # postinstall runs `prisma generate`, which needs no database.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  migrations:
+    name: Migrations build an empty database
+    runs-on: ubuntu-latest
+
+    # A throwaway Postgres, so this proves the migrations work from nothing
+    # without touching Supabase or needing any secret.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DB_SCHEMA: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create target and shadow databases
+        run: npm run db:ensure-schema -- --shadow
+
+      - name: Apply every migration from scratch
+        run: npm run db:deploy
+
+      - name: Seed
+        run: npm run db:seed
+
+      # Catches the easy mistake: schema.prisma edited, migration forgotten.
+      # Replays the migrations into the shadow database and compares the
+      # result to the schema file — exit code 2 means they disagree.
+      - name: Migrations match schema.prisma
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema prisma/schema.prisma \
+            --exit-code
