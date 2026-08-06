@@ -95,7 +95,7 @@ Events are displayed on the club profile page only (no separate event URLs).
 
 ## Data Model (conceptual)
 
-### rt_run_clubs
+### run_clubs
 | Field | Type | Notes |
 |-------|------|-------|
 | id | text (PK) | slug from name |
@@ -112,7 +112,7 @@ Events are displayed on the club profile page only (no separate event URLs).
 | owner_id | uuid | FK to auth.users |
 | created_at | timestamptz | |
 
-### rt_club_members
+### club_members
 | Field | Type | Notes |
 |-------|------|-------|
 | club_id | text (FK) | |

@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ race }, { status: 201 });
   } catch (err) {
     // Backstop for the unique dedup index racing with the pre-check above.
-    if (err instanceof Error && err.message.includes("rt_races_dedup_idx")) {
+    if (err instanceof Error && err.message.includes("races_dedup_idx")) {
       return NextResponse.json(
         { error: "A race with the same name, date, and location already exists" },
         { status: 409 },

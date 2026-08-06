@@ -5,7 +5,7 @@ import { getPrisma } from "@/lib/db/prisma";
 import { ROLES, type Role, type UserAccount } from "@/lib/types";
 
 /**
- * RBAC roles, stored in rt_user_roles. A user with no row is a plain "user".
+ * RBAC roles, stored in user_roles. A user with no row is a plain "user".
  * Admins can do everything moderators can; moderators can edit/delete any
  * race; users can only edit races they submitted.
  */

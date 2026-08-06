@@ -21,7 +21,7 @@ import { getPrisma } from "./prisma";
 import type { RaceStore } from "./store";
 
 /**
- * Prisma-backed RaceStore — the only code that reads or writes the rt_
+ * Prisma-backed RaceStore — the only code that reads or writes this app's
  * tables. Server-side only; the connection (and the schema it targets) is
  * set up in prisma.ts.
  */
@@ -303,14 +303,14 @@ export class PrismaRaceStore implements RaceStore {
         // different matter — that one is a real conflict, reported as a 409
         // by the route, which matches on the index name below.
         if (
-          isUniqueViolation(error, "rt_races_pkey") &&
+          isUniqueViolation(error, "races_pkey") &&
           attempt < KEY_COLLISION_RETRIES
         ) {
           continue;
         }
-        if (isUniqueViolation(error, "rt_races_dedup_idx")) {
+        if (isUniqueViolation(error, "races_dedup_idx")) {
           throw new Error(
-            "Failed to create race: rt_races_dedup_idx — a race with the " +
+            "Failed to create race: races_dedup_idx — a race with the " +
               "same name, date, and location already exists",
           );
         }
@@ -328,9 +328,9 @@ export class PrismaRaceStore implements RaceStore {
       return rowToRace(row);
     } catch (error) {
       if (isNotFound(error)) return null;
-      if (isUniqueViolation(error, "rt_races_dedup_idx")) {
+      if (isUniqueViolation(error, "races_dedup_idx")) {
         throw new Error(
-          "Failed to update race: rt_races_dedup_idx — a race with the " +
+          "Failed to update race: races_dedup_idx — a race with the " +
             "same name, date, and location already exists",
         );
       }
@@ -427,7 +427,7 @@ export class PrismaRaceStore implements RaceStore {
         return rowToRunClub(row);
       } catch (error) {
         if (
-          isUniqueViolation(error, "rt_run_clubs_pkey") &&
+          isUniqueViolation(error, "run_clubs_pkey") &&
           attempt < KEY_COLLISION_RETRIES
         ) {
           continue;

@@ -7,7 +7,7 @@ import type { ApiKeyMeta } from "@/lib/types";
 
 /**
  * REST API keys. A key is `rt_` + 48 hex chars, shown to the user exactly
- * once at creation; only its SHA-256 hash is stored (rt_api_keys table).
+ * once at creation; only its SHA-256 hash is stored (api_keys table).
  * Keys authenticate as the user who created them via `Authorization: Bearer`.
  *
  * Key management itself is deliberately session-only (see the /api/api-keys

@@ -1,15 +1,24 @@
 // Race Tracker database schema.
 //
-// Every table is prefixed with rt_ (see AGENTS.md). The Postgres *schema*
-// these tables live in is not written here — it comes from DB_SCHEMA at
-// runtime (see src/lib/db/connection.ts), so the same migrations can build
-// local_dev, public, or a per-PR schema. Never schema-qualify anything in
-// this file or in a migration, or that portability is lost.
+// This app owns a whole Postgres schema (rt_local in development, rt_prod in
+// production) and every table in it, so table names are plain. The schema
+// name is not written here — it comes from DB_SCHEMA at runtime (see
+// src/lib/db/connection.ts), so the same migrations build any environment.
+// Never schema-qualify anything in this file or in a migration, or that
+// portability is lost.
+//
+// The database is shared with other projects, whose tables live in `public`
+// and include their own `races` and `users`. Nothing here may ever be built
+// in `public` — connection.ts refuses it.
+//
+// Model names keep an Rt prefix even though the tables do not: they are the
+// database row types, and `Race` / `RunClub` already mean the domain types
+// in src/lib/types.ts that the store maps them to.
 //
 // Things Prisma cannot express live as hand-written SQL in the migrations:
 // row level security, the entry_status / role CHECK constraints, and the
 // lower(...) functional indexes. Prisma leaves them alone — but they are
-// not recreated automatically either, so a new rt_ table needs its RLS
+// not recreated automatically either, so a new table needs its RLS
 // statement added to the migration by hand.
 
 generator client {
@@ -67,7 +76,7 @@ model RtRace {
   @@index([countryCode])
   @@index([standardDistances(ops: ArrayOps)], type: Gin)
   @@index([tags(ops: ArrayOps)], type: Gin)
-  @@map("rt_races")
+  @@map("races")
 }
 
 /// Races saved to a user's list.
@@ -79,10 +88,8 @@ model RtUserRace {
   race RtRace @relation(fields: [raceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([userId, raceId])
-  // Index names are pinned to the ones the pre-Prisma SQL migrations created,
-  // so an existing database baselines onto this schema with no diff.
-  @@index([userId], map: "rt_user_races_user_idx")
-  @@map("rt_user_races")
+  @@index([userId])
+  @@map("user_races")
 }
 
 /// REST API keys. Only the SHA-256 hash of a key is stored; the plaintext
@@ -104,8 +111,8 @@ model RtApiKey {
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
 
-  @@index([userId], map: "rt_api_keys_user_idx")
-  @@map("rt_api_keys")
+  @@index([userId])
+  @@map("api_keys")
 }
 
 /// RBAC. A user with no row here is a plain "user".
@@ -115,7 +122,7 @@ model RtUserRole {
   role      String
   updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  @@map("rt_user_roles")
+  @@map("user_roles")
 }
 
 /// Community run clubs. `runs` is a schedule (weekly / monthly / one-off),
@@ -144,6 +151,6 @@ model RtRunClub {
   ownerId   String   @map("owner_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  @@index([latitude, longitude], map: "rt_run_clubs_latlng_idx")
-  @@map("rt_run_clubs")
+  @@index([latitude, longitude])
+  @@map("run_clubs")
 }

@@ -448,7 +448,7 @@ const RACES = [
 ];
 
 const INSERT_RACE = `
-  insert into rt_races (
+  insert into races (
     id, name, date, distances, standard_distances, city, region, country,
     country_code, entry_status, tags, entry_methods, website, description
   )
@@ -457,7 +457,7 @@ const INSERT_RACE = `
 `;
 
 const GRANT_ADMIN = `
-  insert into rt_user_roles (user_id, role)
+  insert into user_roles (user_id, role)
   select id, 'admin' from auth.users where email = $1
   on conflict (user_id) do update set role = 'admin', updated_at = now()
   returning user_id

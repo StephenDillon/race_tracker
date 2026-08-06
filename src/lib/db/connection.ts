@@ -1,9 +1,10 @@
 /**
  * Database connection settings, derived from env vars in one place.
  *
- * Which Postgres *schema* the rt_ tables live in is configuration, not code:
- * `DB_SCHEMA` picks it (local_dev locally, public in production), and the
- * same Prisma migrations build whichever one is named. Nothing else in the
+ * This app owns an entire Postgres schema and every table in it, so the
+ * tables have plain names (races, run_clubs, …). `DB_SCHEMA` picks which
+ * schema — rt_local in development, rt_prod in production — and the same
+ * Prisma migrations build whichever one is named. Nothing else in the
  * codebase should read these env vars.
  *
  * Deliberately free of `server-only` and of any `@/` alias imports: this
@@ -14,10 +15,8 @@
  *   DIRECT_URL    direct/session connection (port 5432) for migrations,
  *                 which cannot run through a transaction pooler. Falls back
  *                 to DATABASE_URL when unset.
- *   DB_SCHEMA     Postgres schema holding the rt_ tables. Default: public.
+ *   DB_SCHEMA     Postgres schema to build in. Required, and never public.
  */
-
-export const DEFAULT_SCHEMA = "public";
 
 /** Unquoted Postgres identifier — the only shape we accept for DB_SCHEMA. */
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]*$/;
@@ -25,16 +24,34 @@ const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]*$/;
 type Env = Record<string, string | undefined>;
 
 /**
- * The schema the rt_ tables live in. Restricted to a plain lowercase
- * identifier so it can be interpolated into a search_path / URL without
- * quoting games — this value reaches the database as SQL.
+ * The schema this app's tables live in.
+ *
+ * Required rather than defaulting, and `public` is rejected outright: this
+ * Postgres instance is shared with other projects whose tables live in
+ * public — including their own `races` and `users`. Defaulting there would
+ * quietly point the app at someone else's data, or migrate over it.
+ *
+ * Restricted to a plain lowercase identifier so it can be interpolated into
+ * a search_path or URL without quoting games — the value reaches the
+ * database as SQL.
  */
 export function databaseSchema(env: Env = process.env): string {
   const schema = env.DB_SCHEMA?.trim();
-  if (!schema) return DEFAULT_SCHEMA;
+  if (!schema) {
+    throw new Error(
+      'DB_SCHEMA is not set — name the schema this environment owns (e.g. "rt_local")',
+    );
+  }
   if (!SCHEMA_PATTERN.test(schema)) {
     throw new Error(
-      `Invalid DB_SCHEMA "${schema}": expected a lowercase identifier like "local_dev"`,
+      `Invalid DB_SCHEMA "${schema}": expected a lowercase identifier like "rt_local"`,
+    );
+  }
+  if (schema === "public") {
+    throw new Error(
+      "DB_SCHEMA must not be public: this database is shared with other " +
+        "projects whose tables live there. Use a schema this app owns, " +
+        'such as "rt_local" or "rt_prod".',
     );
   }
   return schema;
