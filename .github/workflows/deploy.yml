@@ -1,9 +1,9 @@
 name: Deploy
 
-# Production deploys. Vercel's own Git integration must be turned off for
-# this project (Vercel → Settings → Git → Ignored Build Step, or disconnect
-# the repo), otherwise every push deploys twice and the migration ordering
-# below is not guaranteed.
+# Production deploys. Vercel's own Git integration is switched off in
+# vercel.json (git.deploymentEnabled: false) — with both running, every push
+# would deploy twice and the migrate-then-activate ordering below would not
+# be guaranteed.
 on:
   push:
     branches: [main]

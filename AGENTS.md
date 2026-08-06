@@ -24,7 +24,7 @@ The races page (`/races`) shows a table of **25 upcoming races** with a filter b
 ## Database rules
 
 - **This app owns a whole Postgres schema, and `public` is off limits.** The Supabase instance is shared with unrelated projects whose tables live in `public` — including their own `races` and `users`. Ours live in a schema of their own (`rt_local` in development, `rt_prod` in production) with plain table names: `races`, `user_races`, `api_keys`, `user_roles`, `run_clubs`. There is no table-name prefix any more; the schema is the boundary. `databaseSchema()` in `src/lib/db/connection.ts` requires `DB_SCHEMA` and rejects `public` outright — do not weaken that.
-- **Prisma owns the schema.** Change `prisma/schema.prisma`, then `npm run db:migrate` — never hand-write DDL in the Supabase SQL editor. Full workflow: [prisma/README.md](./prisma/README.md). The old `supabase/migrations/*.sql` files built the abandoned `public.rt_*` tables; they are historical and must not be run or extended.
+- **Prisma owns the schema.** Change `prisma/schema.prisma`, then `npm run db:migrate` — never hand-write DDL in the Supabase SQL editor. Full workflow: [prisma/README.md](./prisma/README.md).
 - **Which schema the tables live in is configuration, not code.** `src/lib/db/connection.ts` is the only place that reads `DB_SCHEMA`. Nothing in `prisma/` may name a schema — no `public.` or `rt_local.` prefixes in migration SQL — or the same migration can no longer build every environment.
 - Race and club ids are short 8-char keys (lowercase a–z0–9) generated **by the app server** on create (`generateRaceKey` in `src/lib/db/prisma-store.ts`, collision-retried); the id columns have no DB default.
 - RLS is enabled on every table with **no policies**: the backend connects as the database owner (which bypasses RLS), so nothing reached through PostgREST or an anon key can touch them. Prisma cannot express RLS, so **a new table must add its own `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` to the migration by hand**, along with any CHECK constraints and `lower(...)` indexes.
@@ -63,9 +63,7 @@ src/
 prisma/
   schema.prisma         # Source of truth for the schema
   migrations/           # Migration history (schema-agnostic SQL — never schema-qualified)
-  seed.mjs              # Starter races + World Major entry methods (`npm run db:seed`)
   README.md             # Migration workflow, schema-per-environment, connection strings
-supabase/               # Historical pre-Prisma SQL — do not run, do not extend
 ```
 
 ## Auth & REST API
@@ -99,5 +97,4 @@ supabase/               # Historical pre-Prisma SQL — do not run, do not exten
 - `npm start` — serve production build
 - `npm run db:migrate` — create and apply a migration from `prisma/schema.prisma`
 - `npm run db:deploy` — apply pending migrations (CI / production)
-- `npm run db:seed` — starter races, idempotent
-- `npm run db:reset` — rebuild `DB_SCHEMA` from scratch and re-seed
+- `npm run db:reset` — rebuild `DB_SCHEMA` from scratch (comes up empty; there is no seed data)

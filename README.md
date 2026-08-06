@@ -18,16 +18,16 @@ All data access is server-side: the UI only calls this app's own API routes (`/a
    - `DATABASE_URL` / `DIRECT_URL` — **Project Settings → Database → Connection string** (transaction pooler for the first, session/direct for the second)
    - `DB_SCHEMA` — the Postgres schema this environment owns: `rt_local`. Never `public` (see below)
    - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — **Project Settings → API**, for Auth
-3. Create the schema and load sample races:
+3. Build the schema and start the app:
 
 ```bash
 npm install
 npm run db:deploy
-npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000. The database starts empty — there is no seed
+data, so add races by submitting them through the app.
 
 The app owns an entire Postgres schema — `rt_local` in development, `rt_prod`
 in production — and every table in it, so tables are named plainly (`races`,
@@ -49,7 +49,7 @@ One-time setup:
 
 1. Import the GitHub repo at [vercel.com/new](https://vercel.com/new) — Next.js is auto-detected, no config needed.
 2. In Vercel **Project Settings → Environment Variables**, add `DATABASE_URL`, `DIRECT_URL`, `DB_SCHEMA=rt_prod`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `GOOGLE_PLACES_API_KEY`.
-3. In Vercel **Project Settings → Git**, turn off automatic deploys (set the Ignored Build Step to `exit 0`, or disconnect the repo). The workflow deploys instead; leaving both on deploys everything twice and loses the migrate-then-deploy ordering.
+3. Vercel's own Git deploys are switched off by [`vercel.json`](./vercel.json) (`git.deploymentEnabled: false`) — the workflow deploys instead. Leaving both on would deploy everything twice and lose the migrate-then-deploy ordering.
 4. In GitHub **Settings → Secrets and variables → Actions**, add secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the last two are in `.vercel/repo.json` or `.vercel/project.json` after running `vercel link`), plus `DATABASE_URL` and `DIRECT_URL`. Add the repository **variable** `DB_SCHEMA` = `rt_prod`.
 
    When creating the token at [vercel.com/account/tokens](https://vercel.com/account/tokens), set its **Scope** to the team that owns the project. A token left on a different scope, or narrowed to a single project, authenticates fine but cannot read project settings — the workflow's "Verify Vercel credentials" step tells you which of those it is.

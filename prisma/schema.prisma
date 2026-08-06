@@ -64,7 +64,7 @@ model RtRace {
   website     String?
   description String?
 
-  /// Submitting user (auth.users.id). Null for seeded/system rows, which
+  /// Submitting user (auth.users.id). Null for legacy/system rows, which
   /// only moderators and admins can edit.
   submittedBy String?  @map("submitted_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

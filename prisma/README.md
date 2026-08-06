@@ -36,13 +36,12 @@ Migrations cannot run over a transaction pooler, which is why there are two.
 npm run db:migrate       # create + apply a migration from schema.prisma changes
 npm run db:deploy        # apply pending migrations (CI, production)
 npm run db:status        # what is applied, what is pending
-npm run db:seed          # starter races; idempotent
-npm run db:reset         # drop the schema's tables, re-migrate, re-seed
+npm run db:reset         # drop the schema's tables and re-migrate
 npm run db:studio        # browse the data
 ```
 
 Each of these creates the schema first if it does not exist, so a brand new
-environment needs nothing but `npm run db:deploy`.
+environment needs nothing but `npm run db:deploy`. It comes up empty.
 
 `db:migrate` also needs a scratch database (`prisma_shadow`) that Prisma
 rebuilds on every run to detect drift. It is created automatically and holds
@@ -70,6 +69,9 @@ in the database and always arrive as an array in the client.
 ## CI
 
 `.github/workflows/ci.yml` rebuilds the whole schema in a throwaway Postgres
-on every pull request, seeds it, and then checks that replaying the
-migrations produces exactly what `schema.prisma` describes. A schema change
-committed without its migration fails there.
+on every pull request, then checks that replaying the migrations produces
+exactly what `schema.prisma` describes. A schema change committed without its
+migration fails there.
+
+There is no seed data: every environment starts empty, and races arrive by
+being submitted through the app.

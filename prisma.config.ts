@@ -18,7 +18,6 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    seed: "npm run db:seed",
   },
   // Migrations run over the direct connection, against the schema named by
   // DB_SCHEMA — see src/lib/db/connection.ts.

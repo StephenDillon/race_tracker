@@ -67,9 +67,6 @@ jobs:
       - name: Apply every migration from scratch
         run: npm run db:deploy
 
-      - name: Seed
-        run: npm run db:seed
-
       # Catches the easy mistake: schema.prisma edited, migration forgotten.
       # Replays the migrations into the shadow database and compares the
       # result to the schema file — exit code 2 means they disagree.
